@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FantaPRO Dashboard</title>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Carga de íconos (Heroicons) -->
+    <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
+    <style>
+        /* Fuente Inter */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Gris claro de fondo */
+        }
+        /* Clases para los roles */
+        .role-P { background-color: #fef08a; color: #a16207; } /* Amarillo */
+        .role-D { background-color: #c7d2fe; color: #3730a3; } /* Azul */
+        .role-C { background-color: #bbf7d0; color: #15803d; } /* Verde */
+        .role-A { background-color: #fecaca; color: #b91c1c; } /* Rojo */
+
+        /* Scrollbar personalizada */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #c7c7c7;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a3a3a3;
+        }
+        
+        /* Estilo para la sección de plantilla fija */
+        #mia-rosa-container {
+            position: sticky;
+            top: 1.5rem; /* Ajuste del sticky top */
+            height: calc(100vh - 3rem); /* Altura de la ventana menos el padding */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 md:p-6">
+
+    <!-- Contenedor principal -->
+    <div class="max-w-screen-2xl mx-auto">
+
+        <!-- Cabecera y Autenticación -->
+        <header class="mb-4 p-4 bg-white rounded-lg shadow-sm flex flex-col md:flex-row justify-between items-center">
+            <h1 class="text-3xl font-bold text-gray-800">
+                <span class="text-indigo-600">Fanta</span><span class="text-gray-600">PRO</span> Dashboard
+            </h1>
+            <div id="auth-container" class="mt-4 md:mt-0 text-right">
+                <button id="auth-button" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-300">
+                    Cargando...
+                </button>
+                <p id="user-id" class="text-xs text-gray-400 mt-1 font-mono"></p>
+            </div>
+        </header>
+
+        <!-- Contenedor de dos columnas -->
+        <div class="flex flex-col lg:flex-row gap-6">
+
+            <!-- Columna Izquierda: Lista de Jugadores y Filtros -->
+            <main class="w-full lg:w-2/3">
+                
+                <!-- Controles de Filtros -->
+                <div class="p-4 bg-white rounded-lg shadow-sm mb-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- Filtro por Rol -->
+                        <div>
+                            <label for="filter-role" class="block text-sm font-medium text-gray-700 mb-1">Filtrar por Rol</label>
+                            <select id="filter-role" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="all">Todos los Roles</option>
+                                <option value="P">Portieri (P)</option>
+                                <option value="D">Difensori (D)</option>
+                                <option value="C">Centrocampisti (C)</option>
+                                <option value="A">Attaccanti (A)</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Filtro por Equipo -->
+                        <div>
+                            <label for="filter-team" class="block text-sm font-medium text-gray-700 mb-1">Filtrar por Equipo</label>
+                            <select id="filter-team" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="all">Todos los Equipos</option>
+                                <!-- Los equipos se cargarán dinámicamente -->
+                            </select>
+                        </div>
+
+                        <!-- Ordenar por -->
+                        <div>
+                            <label for="sort-by" class="block text-sm font-medium text-gray-700 mb-1">Ordenar por</label>
+                            <select id="sort-by" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                <option value="fm_desc">FantaMedia (desc)</option>
+                                <option value="fm_asc">FantaMedia (asc)</option>
+                                <option value="mv_desc">Media Voto (desc)</option>
+                                <option value="nome_asc">Nombre (A-Z)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grid de Jugadores -->
+                <div id="loading-players" class="text-center p-10">
+                    <p class="text-lg text-gray-600">Cargando jugadores...</p>
+                </div>
+                <div id="player-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <!-- Las tarjetas de jugadores se insertarán aquí -->
+                </div>
+            </main>
+
+            <!-- Columna Derecha: Mi Plantilla (Sticky) -->
+            <aside class="w-full lg:w-1/3">
+                <div id="mia-rosa-container" class="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
+                    <div class="p-4 border-b border-gray-200">
+                        <h2 class="text-xl font-bold text-gray-800">La Mia Rosa (<span id="rosa-count">0</span>/25)</h2>
+                        <p class="text-sm text-gray-500">Tu plantilla se guarda automáticamente.</p>
+                    </div>
+                    
+                    <!-- Contenedor scrollable para la lista de jugadores -->
+                    <div id="mia-rosa-list" class="flex-grow overflow-y-auto p-4 space-y-4">
+                        <!-- Secciones por Rol -->
+                        <div id="rosa-P-container">
+                            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Porteros (<span id="count-P">0</span>)</h3>
+                            <div id="rosa-P" class="space-y-2"></div>
+                        </div>
+                        <div id="rosa-D-container">
+                            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Defensas (<span id="count-D">0</span>)</h3>
+                            <div id="rosa-D" class="space-y-2"></div>
+                        </div>
+                        <div id="rosa-C-container">
+                            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Centrocampistas (<span id="count-C">0</span>)</h3>
+                            <div id="rosa-C" class="space-y-2"></div>
+                        </div>
+                        <div id="rosa-A-container">
+                            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Delanteros (<span id="count-A">0</span>)</h3>
+                            <div id="rosa-A" class="space-y-2"></div>
+                        </div>
+                        
+                        <div id="rosa-empty" class="text-center text-gray-400 py-10">
+                            <ion-icon name="shirt-outline" class="text-4xl"></ion-icon>
+                            <p>Tu plantilla está vacía.</p>
+                            <p class="text-xs">Añade jugadores desde la lista.</p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+        </div>
+    </div>
+
+    <!-- Modal de Confirmación para Eliminar -->
+    <div id="delete-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center hidden z-50">
+      <div class="relative mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3 text-center">
+          <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+            <ion-icon name="trash-outline" class="text-red-600 text-2xl"></ion-icon>
+          </div>
+          <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2">Eliminar Jugador</h3>
+          <div class="mt-2 px-7 py-3">
+            <p class="text-sm text-gray-500">
+              ¿Estás seguro de que quieres eliminar a <strong id="modal-player-name"></strong> de tu plantilla?
+            </p>
+          </div>
+          <div class="items-center px-4 py-3 gap-2 flex justify-center">
+            <button id="modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 w-24">
+              Cancelar
+            </button>
+            <button id="modal-confirm" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 w-24">
+              Eliminar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Script de Firebase -->
+    <script type="module">
+        // Importaciones de Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            onAuthStateChanged,
+            signInWithCustomToken
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            setDoc, 
+            collection, 
+            onSnapshot,
+            addDoc,
+            deleteDoc,
+            query,
+            where,
+            getDocs
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- CONFIGURACIÓN DE FIREBASE ---
+        // Estas variables se inyectarán en el entorno de producción
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id-fantapro';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, auth, db, userId;
+        let currentRosa = []; // Caché local de la plantilla
+        let unsubscribeRosa; // Función para detener el listener de Firestore
+
+        // --- BASE DE DATOS ESTATICA DE JUGADORES (Datos Reales Simulados) ---
+        // (En una app real, esto vendría de una API, pero lo incrustamos aquí)
+        const DB_GIOCATORI = [
+            // INTER
+            { id: 1, nome: "Lautaro Martínez", squadra: "Inter", ruolo: "A", mv: 6.55, fm: 8.82, gol: 24, assist: 2 },
+            { id: 2, nome: "Hakan Çalhanoğlu", squadra: "Inter", ruolo: "C", mv: 6.42, fm: 7.5, gol: 13, assist: 3 },
+            { id: 3, nome: "Marcus Thuram", squadra: "Inter", ruolo: "A", mv: 6.29, fm: 7.39, gol: 13, assist: 7 },
+            { id: 4, nome: "Federico Dimarco", squadra: "Inter", ruolo: "D", mv: 6.4, fm: 7.03, gol: 5, assist: 6 },
+            { id: 5, nome: "Nicolò Barella", squadra: "Inter", ruolo: "C", mv: 6.33, fm: 6.6, gol: 2, assist: 3 },
+            { id: 6, nome: "Yann Sommer", squadra: "Inter", ruolo: "P", mv: 6.17, fm: 5.42, gol_subiti: 19, rig_par: 1 },
+            { id: 7, nome: "Alessandro Bastoni", squadra: "Inter", ruolo: "D", mv: 6.18, fm: 6.27, gol: 1, assist: 1 },
+            // MILAN
+            { id: 8, nome: "Rafael Leão", squadra: "Milan", ruolo: "A", mv: 6.32, fm: 7.21, gol: 9, assist: 9 },
+            { id: 9, nome: "Christian Pulisic", squadra: "Milan", ruolo: "C", mv: 6.4, fm: 7.5, gol: 12, assist: 7 },
+            { id: 10, nome: "Olivier Giroud", squadra: "Milan", ruolo: "A", mv: 6.17, fm: 7.63, gol: 15, assist: 8 },
+            { id: 11, nome: "Theo Hernández", squadra: "Milan", ruolo: "D", mv: 6.23, fm: 6.9, gol: 5, assist: 4 },
+            { id: 12, nome: "Mike Maignan", squadra: "Milan", ruolo: "P", mv: 6.21, fm: 4.86, gol_subiti: 34, rig_par: 1 },
+            { id: 13, nome: "Ruben Loftus-Cheek", squadra: "Milan", ruolo: "C", mv: 6.29, fm: 6.78, gol: 6, assist: 1 },
+            // JUVENTUS
+            { id: 14, nome: "Dušan Vlahović", squadra: "Juventus", ruolo: "A", mv: 6.24, fm: 7.73, gol: 16, assist: 4 },
+            { id: 15, nome: "Federico Chiesa", squadra: "Juventus", ruolo: "C", mv: 6.22, fm: 7.02, gol: 9, assist: 3 },
+            { id: 16, nome: "Gleison Bremer", squadra: "Juventus", ruolo: "D", mv: 6.18, fm: 6.35, gol: 3, assist: 0 },
+            { id: 17, nome: "Wojciech Szczęsny", squadra: "Juventus", ruolo: "P", mv: 6.26, fm: 5.2, gol_subiti: 28, rig_par: 1 },
+            { id: 18, nome: "Adrien Rabiot", squadra: "Juventus", ruolo: "C", mv: 6.22, fm: 6.64, gol: 5, assist: 3 },
+            // ATALANTA
+            { id: 19, nome: "Teun Koopmeiners", squadra: "Atalanta", ruolo: "C", mv: 6.41, fm: 7.66, gol: 12, assist: 4 },
+            { id: 20, nome: "Gianluca Scamacca", squadra: "Atalanta", ruolo: "A", mv: 6.13, fm: 7.33, gol: 12, assist: 5 },
+            { id: 21, nome: "Charles De Ketelaere", squadra: "Atalanta", ruolo: "C", mv: 6.32, fm: 7.39, gol: 10, assist: 8 },
+            { id: 22, nome: "Marco Carnesecchi", squadra: "Atalanta", ruolo: "P", mv: 6.35, fm: 5.1, gol_subiti: 25, rig_par: 2 },
+            { id: 23, nome: "Ademola Lookman", squadra: "Atalanta", ruolo: "A", mv: 6.08, fm: 6.88, gol: 9, assist: 6 },
+            // BOLOGNA
+            { id: 24, nome: "Joshua Zirkzee", squadra: "Bologna", ruolo: "A", mv: 6.51, fm: 7.36, gol: 11, assist: 5 },
+            { id: 25, nome: "Riccardo Orsolini", squadra: "Bologna", ruolo: "C", mv: 6.25, fm: 7.15, gol: 10, assist: 2 },
+            { id: 26, nome: "Lewis Ferguson", squadra: "Bologna", ruolo: "C", mv: 6.19, fm: 6.7, gol: 6, assist: 3 },
+            { id: 27, nome: "Riccardo Calafiori", squadra: "Bologna", ruolo: "D", mv: 6.32, fm: 6.37, gol: 0, assist: 5 },
+            // ROMA
+            { id: 28, nome: "Paulo Dybala", squadra: "Roma", ruolo: "A", mv: 6.6, fm: 8.32, gol: 13, assist: 9 },
+            { id: 29, nome: "Romelu Lukaku", squadra: "Roma", ruolo: "A", mv: 6.13, fm: 7.31, gol: 13, assist: 3 },
+            { id: 30, nome: "Lorenzo Pellegrini", squadra: "Roma", ruolo: "C", mv: 6.23, fm: 7.21, gol: 8, assist: 3 },
+            { id: 31, nome: "Gianluca Mancini", squadra: "Roma", ruolo: "D", mv: 5.92, fm: 6.13, gol: 1, assist: 1 },
+            // LAZIO
+            { id: 32, nome: "Ciro Immobile", squadra: "Lazio", ruolo: "A", mv: 5.79, fm: 6.55, gol: 7, assist: 1 },
+            { id: 33, nome: "Mattia Zaccagni", squadra: "Lazio", ruolo: "C", mv: 6.07, fm: 6.67, gol: 6, assist: 1 },
+            { id: 34, nome: "Luis Alberto", squadra: "Lazio", ruolo: "C", mv: 6.21, fm: 6.79, gol: 5, assist: 6 },
+            { id: 35, nome: "Ivan Provedel", squadra: "Lazio", ruolo: "P", mv: 6.25, fm: 5.06, gol_subiti: 27, rig_par: 0 },
+            // FIORENTINA
+            { id: 36, nome: "Nicolás González", squadra: "Fiorentina", ruolo: "C", mv: 6.18, fm: 7.42, gol: 12, assist: 2 },
+            { id: 37, nome: "Giacomo Bonaventura", squadra: "Fiorentina", ruolo: "C", mv: 6.27, fm: 6.97, gol: 8, assist: 3 },
+            { id: 38, nome: "Lucas Beltrán", squadra: "Fiorentina", ruolo: "A", mv: 5.86, fm: 6.38, gol: 6, assist: 2 },
+            // NAPOLI
+            { id: 39, nome: "Victor Osimhen", squadra: "Napoli", ruolo: "A", mv: 6.2, fm: 7.8, gol: 15, assist: 3 },
+            { id: 40, nome: "Kvicha Kvaratskhelia", squadra: "Napoli", ruolo: "C", mv: 6.39, fm: 7.59, gol: 11, assist: 6 },
+            { id: 41, nome: "Giovanni Di Lorenzo", squadra: "Napoli", ruolo: "D", mv: 5.93, fm: 6.14, gol: 1, assist: 6 },
+            { id: 42, nome: "Alex Meret", squadra: "Napoli", ruolo: "P", mv: 6.05, fm: 4.88, gol_subiti: 39, rig_par: 1 },
+            // GENOA
+            { id: 43, nome: "Albert Guðmundsson", squadra: "Genoa", ruolo: "C", mv: 6.42, fm: 7.8, gol: 14, assist: 4 },
+            { id: 44, nome: "Mateo Retegui", squadra: "Genoa", ruolo: "A", mv: 6.1, fm: 6.83, gol: 7, assist: 2 },
+            // TORINO
+            { id: 45, nome: "Duván Zapata", squadra: "Torino", ruolo: "A", mv: 6.2, fm: 7.21, gol: 12, assist: 4 },
+            { id: 46, nome: "Alessandro Buongiorno", squadra: "Torino", ruolo: "D", mv: 6.18, fm: 6.39, gol: 3, assist: 1 },
+            { id: 47, nome: "Vanja Milinković-Savić", squadra: "Torino", ruolo: "P", mv: 6.2, fm: 5.34, gol_subiti: 31, rig_par: 3 },
+            
+            // Más jugadores...
+            { id: 48, nome: "Matteo Politano", squadra: "Napoli", ruolo: "C", mv: 6.13, fm: 7.02, gol: 8, assist: 5 },
+            { id: 49, nome: "Andrea Colpani", squadra: "Monza", ruolo: "C", mv: 6.14, fm: 6.86, gol: 8, assist: 4 },
+            { id: 50, nome: "Michele Di Gregorio", squadra: "Monza", ruolo: "P", mv: 6.32, fm: 5.36, gol_subiti: 37, rig_par: 1 },
+            { id: 51, nome: "Matías Soulé", squadra: "Frosinone", ruolo: "C", mv: 6.28, fm: 7.23, gol: 11, assist: 3 },
+            { id: 52, nome: "Nico Williams", squadra: "Cagliari", ruolo: "A", mv: 6.0, fm: 6.5, gol: 5, assist: 4 }, // Ejemplo
+            { id: 53, nome: "Marten de Roon", squadra: "Atalanta", ruolo: "C", mv: 6.1, fm: 6.05, gol: 0, assist: 1 },
+            { id: 54, nome: "Davide Frattesi", squadra: "Inter", ruolo: "C", mv: 6.2, fm: 7.0, gol: 6, assist: 3 },
+            { id: 55, nome: "Benjamin Pavard", squadra: "Inter", ruolo: "D", mv: 6.2, fm: 6.2, gol: 0, assist: 1 },
+            { id: 56, nome: "Tijjani Reijnders", squadra: "Milan", ruolo: "C", mv: 6.1, fm: 6.3, gol: 3, assist: 3 },
+            { id: 57, nome: "Fikayo Tomori", squadra: "Milan", ruolo: "D", mv: 6.0, fm: 6.1, gol: 3, assist: 0 },
+            { id: 58, nome: "Kenan Yıldız", squadra: "Juventus", ruolo: "A", mv: 6.1, fm: 6.4, gol: 2, assist: 1 },
+            { id: 59, nome: "Weston McKennie", squadra: "Juventus", ruolo: "C", mv: 6.1, fm: 6.4, gol: 0, assist: 7 },
+            { id: 60, nome: "Samuele Ricci", squadra: "Torino", ruolo: "C", mv: 6.0, fm: 6.1, gol: 1, assist: 2 },
+            { id: 61, nome: "Khvicha Kvaratskhelia", squadra: "Napoli", ruolo: "A", mv: 6.39, fm: 7.59, gol: 11, assist: 6 }, // Duplicado de rol C, ajustado a A
+        ];
+        
+        // --- INICIALIZACIÓN DE LA APP ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // No podemos inicializar Firebase aquí, esperamos al Auth
+            initAuth();
+            
+            // Poblamos los filtros
+            populateFilters();
+            
+            // Renderizamos la lista inicial de jugadores
+            renderPlayerList();
+            
+            // Añadimos listeners a los filtros
+            document.getElementById('filter-role').addEventListener('change', renderPlayerList);
+            document.getElementById('filter-team').addEventListener('change', renderPlayerList);
+            document.getElementById('sort-by').addEventListener('change', renderPlayerList);
+
+            // Listeners del Modal
+            document.getElementById('modal-cancel').addEventListener('click', closeModal);
+        });
+
+        // --- LÓGICA DE AUTENTICACIÓN ---
+
+        async function initAuth() {
+            try {
+                // Inicializar Firebase
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                const authButton = document.getElementById('auth-button');
+                authButton.disabled = true;
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        authButton.textContent = 'Conectado';
+                        authButton.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                        authButton.classList.add('bg-green-600', 'cursor-default');
+                        document.getElementById('user-id').textContent = `Tu User ID: ${userId}`;
+                        
+                        // Una vez autenticados, cargamos la plantilla
+                        loadRosa();
+                    } else {
+                        // Si no hay usuario, intentamos loguear
+                        authButton.textContent = 'Conectando...';
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("Error al iniciar sesión:", error);
+                            authButton.textContent = 'Error de conexión';
+                            authButton.classList.remove('bg-indigo-600');
+                            authButton.classList.add('bg-red-600');
+                        }
+                    }
+                });
+
+            } catch (e) {
+                console.error("Error inicializando Firebase. ¿Falta configuración?", e);
+                document.getElementById('auth-button').textContent = 'Error de Config.';
+                document.getElementById('auth-button').classList.add('bg-red-600');
+            }
+        }
+
+        // --- LÓGICA DE RENDERIZADO (VISTAS) ---
+
+        function populateFilters() {
+            const teams = [...new Set(DB_GIOCATORI.map(p => p.squadra))].sort();
+            const teamSelect = document.getElementById('filter-team');
+            teams.forEach(team => {
+                const option = document.createElement('option');
+                option.value = team;
+                option.textContent = team;
+                teamSelect.appendChild(option);
+            });
+        }
+
+        function renderPlayerList() {
+            const grid = document.getElementById('player-grid');
+            const loading = document.getElementById('loading-players');
+            grid.innerHTML = ''; // Limpiamos el grid
+            loading.style.display = 'block';
+
+            // Obtenemos valores de filtros
+            const roleFilter = document.getElementById('filter-role').value;
+            const teamFilter = document.getElementById('filter-team').value;
+            const sortBy = document.getElementById('sort-by').value;
+
+            // 1. Filtrar
+            let filteredPlayers = DB_GIOCATORI.filter(player => {
+                const matchesRole = (roleFilter === 'all') || (player.ruolo === roleFilter);
+                const matchesTeam = (teamFilter === 'all') || (player.squadra === teamFilter);
+                return matchesRole && matchesTeam;
+            });
+
+            // 2. Ordenar
+            filteredPlayers.sort((a, b) => {
+                switch (sortBy) {
+                    case 'fm_asc': return a.fm - b.fm;
+                    case 'mv_desc': return b.mv - a.mv;
+                    case 'nome_asc': return a.nome.localeCompare(b.nome);
+                    case 'fm_desc':
+                    default:
+                        return b.fm - a.fm;
+                }
+            });
+
+            // 3. Renderizar
+            setTimeout(() => { // Simulamos una pequeña carga
+                loading.style.display = 'none';
+                if (filteredPlayers.length === 0) {
+                    grid.innerHTML = `<p class="text-gray-500 md:col-span-2 xl:col-span-3 text-center">No se encontraron jugadores con esos filtros.</p>`;
+                    return;
+                }
+                filteredPlayers.forEach(player => {
+                    const playerCard = createPlayerCard(player);
+                    grid.appendChild(playerCard);
+                });
+            }, 250);
+        }
+        
+        function createPlayerCard(player) {
+            const card = document.createElement('div');
+            card.className = 'bg-white rounded-lg shadow-md overflow-hidden p-4 transition duration-300 hover:shadow-xl';
+            
+            const isAdded = currentRosa.some(p => p.id === player.id);
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-900">${player.nome}</h3>
+                        <p class="text-sm text-gray-600">${player.squadra}</p>
+                    </div>
+                    <span class="role-${player.ruolo} text-xs font-bold px-2 py-1 rounded-full">${player.ruolo}</span>
+                </div>
+                <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+                    <div>
+                        <p class="text-xs text-gray-500">FantaMedia</p>
+                        <p class="text-xl font-semibold text-indigo-600">${player.fm.toFixed(2)}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500">Media Voto</p>
+                        <p class="text-xl font-semibold text-gray-700">${player.mv.toFixed(2)}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500">G/A</p>
+                        <p class="text-xl font-semibold text-gray-700">${player.gol}/${player.assist}</p>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <button 
+                        class="add-player-btn w-full px-3 py-2 rounded-md text-sm font-medium ${isAdded ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'}"
+                        data-player-id="${player.id}"
+                        ${isAdded ? 'disabled' : ''}
+                    >
+                        ${isAdded ? 'En la plantilla' : 'Añadir a la plantilla'}
+                    </button>
+                </div>
+            `;
+
+            // Añadir listener al botón (si no está deshabilitado)
+            if (!isAdded) {
+                card.querySelector('.add-player-btn').addEventListener('click', (e) => {
+                    const playerId = parseInt(e.target.dataset.playerId);
+                    addPlayerToRosa(playerId);
+                });
+            }
+
+            return card;
+        }
+
+        function renderMiaRosa(rosaPlayers) {
+            // Limpiamos listas
+            const rosaEmpty = document.getElementById('rosa-empty');
+            const lists = {
+                P: document.getElementById('rosa-P'),
+                D: document.getElementById('rosa-D'),
+                C: document.getElementById('rosa-C'),
+                A: document.getElementById('rosa-A'),
+            };
+            Object.values(lists).forEach(list => list.innerHTML = '');
+            
+            // Contadores
+            const counts = { P: 0, D: 0, C: 0, A: 0 };
+            
+            if (rosaPlayers.length === 0) {
+                rosaEmpty.style.display = 'block';
+            } else {
+                rosaEmpty.style.display = 'none';
+                rosaPlayers.forEach(player => {
+                    // Buscamos los datos completos del jugador en nuestra DB estática
+                    const playerData = DB_GIOCATORI.find(p => p.id === player.id);
+                    if (playerData) {
+                        counts[playerData.ruolo]++;
+                        const playerRow = createRosaRow(playerData, player.docId);
+                        lists[playerData.ruolo].appendChild(playerRow);
+                    }
+                });
+            }
+            
+            // Actualizamos contadores
+            document.getElementById('rosa-count').textContent = rosaPlayers.length;
+            document.getElementById('count-P').textContent = counts.P;
+            document.getElementById('count-D').textContent = counts.D;
+            document.getElementById('count-C').textContent = counts.C;
+            document.getElementById('count-A').textContent = counts.A;
+
+            // Actualizamos la lista de jugadores (para habilitar/deshabilitar botones)
+            renderPlayerList();
+        }
+
+        function createRosaRow(player, docId) {
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between p-2 bg-gray-50 rounded-md';
+            row.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <span class="role-${player.ruolo} text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full">${player.ruolo}</span>
+                    <div>
+                        <p class="text-sm font-medium text-gray-800">${player.nome}</p>
+                        <p class="text-xs text-gray-500">${player.squadra}</p>
+                    </div>
+                </div>
+                <button class="remove-player-btn text-red-400 hover:text-red-600" data-doc-id="${docId}" data-player-name="${player.nome}">
+                    <ion-icon name="close-circle-outline" class="text-lg"></ion-icon>
+                </button>
+            `;
+            
+            row.querySelector('.remove-player-btn').addEventListener('click', (e) => {
+                const btn = e.currentTarget;
+                const docId = btn.dataset.docId;
+                const playerName = btn.dataset.playerName;
+                openDeleteModal(playerName, docId);
+            });
+            
+            return row;
+        }
+        
+        // --- LÓGICA DE FIRESTORE (DATOS) ---
+        
+        function getRosaCollectionRef() {
+            // Ruta de la colección privada del usuario
+            return collection(db, `artifacts/${appId}/users/${userId}/miaRosa`);
+        }
+
+        async function loadRosa() {
+            if (unsubscribeRosa) unsubscribeRosa(); // Detenemos el listener anterior si existe
+
+            const rosaCollection = getRosaCollectionRef();
+            
+            // onSnapshot escucha cambios en tiempo real
+            unsubscribeRosa = onSnapshot(rosaCollection, (snapshot) => {
+                currentRosa = snapshot.docs.map(doc => ({
+                    ...doc.data(),
+                    docId: doc.id
+                }));
+                
+                // Ordenamos por rol
+                currentRosa.sort((a, b) => {
+                    const playerA = DB_GIOCATORI.find(p => p.id === a.id);
+                    const playerB = DB_GIOCATORI.find(p => p.id === b.id);
+                    if (!playerA || !playerB) return 0;
+                    
+                    const roleOrder = { 'P': 1, 'D': 2, 'C': 3, 'A': 4 };
+                    return roleOrder[playerA.ruolo] - roleOrder[playerB.ruolo];
+                });
+                
+                renderMiaRosa(currentRosa);
+            }, (error) => {
+                console.error("Error al cargar la plantilla (onSnapshot): ", error);
+                alert("Error al conectar con la base de datos. Revisa la consola.");
+            });
+        }
+
+        async function addPlayerToRosa(playerId) {
+            if (currentRosa.length >= 25) {
+                alert("Plantilla llena. No puedes añadir más de 25 jugadores.");
+                return;
+            }
+
+            const playerToAdd = DB_GIOCATORI.find(p => p.id === playerId);
+            if (!playerToAdd) return;
+
+            // Deshabilitamos el botón para evitar doble click
+            const btn = document.querySelector(`.add-player-btn[data-player-id="${playerId}"]`);
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Añadiendo...';
+            }
+
+            try {
+                // Añadimos solo el ID a Firestore para ahorrar espacio
+                await addDoc(getRosaCollectionRef(), {
+                    id: playerToAdd.id,
+                    addedAt: new Date().toISOString()
+                });
+                // No necesitamos hacer nada más, onSnapshot se encargará de actualizar la UI
+            } catch (error) {
+                console.error("Error al añadir jugador: ", error);
+                if (btn) btn.disabled = false; // Reactivamos el botón si hay error
+            }
+        }
+
+        async function removePlayerFromRosa(docId) {
+            try {
+                const docRef = doc(db, `artifacts/${appId}/users/${userId}/miaRosa/${docId}`);
+                await deleteDoc(docRef);
+                closeModal(); // Cerramos el modal tras el éxito
+                // onSnapshot actualizará la UI
+            } catch (error) {
+                console.error("Error al eliminar jugador: ", error);
+                alert("Error al eliminar el jugador. Inténtalo de nuevo.");
+            }
+        }
+        
+        // --- LÓGICA DEL MODAL ---
+        
+        let docIdToDelete = null;
+
+        function openDeleteModal(playerName, docId) {
+            docIdToDelete = docId;
+            document.getElementById('modal-player-name').textContent = playerName;
+            document.getElementById('delete-modal').classList.remove('hidden');
+            
+            // Asignamos el listener al botón de confirmar (lo hacemos aquí para tener el docId)
+            const confirmBtn = document.getElementById('modal-confirm');
+            confirmBtn.onclick = () => removePlayerFromRosa(docIdToDelete);
+        }
+
+        function closeModal() {
+            docIdToDelete = null;
+            document.getElementById('delete-modal').classList.add('hidden');
+            // Limpiamos el listener
+            document.getElementById('modal-confirm').onclick = null;
+        }
+
+    </script>
+</body>
+</html>
+
