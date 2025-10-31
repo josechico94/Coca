@@ -205,6 +205,9 @@
             getDocs
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // --- CONFIGURACIÓN DE DATOS ---
+        const DATA_URL = ""; // <-- ¡PEGA TU URL "RAW" DE GIST AQUÍ!
+        
         // --- CONFIGURACIÓN DE FIREBASE ---
         // Estas variables se inyectarán en el entorno de producción
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id-fantapro';
@@ -214,106 +217,60 @@
         let app, auth, db, userId;
         let currentRosa = []; // Caché local de la plantilla
         let unsubscribeRosa; // Función para detener el listener de Firestore
+        let DB_GIOCATORI = []; // La base de datos ahora se cargará dinámicamente
 
         // --- BASE DE DATOS ESTATICA DE JUGADORES (Datos Reales Simulados) ---
         // (En una app real, esto vendría de una API, pero lo incrustamos aquí)
-        const DB_GIOCATORI = [
-            // INTER
-            { id: 1, nome: "Lautaro Martínez", squadra: "Inter", ruolo: "A", mv: 6.55, fm: 8.82, gol: 24, assist: 2 },
-            { id: 2, nome: "Hakan Çalhanoğlu", squadra: "Inter", ruolo: "C", mv: 6.42, fm: 7.5, gol: 13, assist: 3 },
-            { id: 3, nome: "Marcus Thuram", squadra: "Inter", ruolo: "A", mv: 6.29, fm: 7.39, gol: 13, assist: 7 },
-            { id: 4, nome: "Federico Dimarco", squadra: "Inter", ruolo: "D", mv: 6.4, fm: 7.03, gol: 5, assist: 6 },
-            { id: 5, nome: "Nicolò Barella", squadra: "Inter", ruolo: "C", mv: 6.33, fm: 6.6, gol: 2, assist: 3 },
-            { id: 6, nome: "Yann Sommer", squadra: "Inter", ruolo: "P", mv: 6.17, fm: 5.42, gol_subiti: 19, rig_par: 1 },
-            { id: 7, nome: "Alessandro Bastoni", squadra: "Inter", ruolo: "D", mv: 6.18, fm: 6.27, gol: 1, assist: 1 },
-            // MILAN
-            { id: 8, nome: "Rafael Leão", squadra: "Milan", ruolo: "A", mv: 6.32, fm: 7.21, gol: 9, assist: 9 },
-            { id: 9, nome: "Christian Pulisic", squadra: "Milan", ruolo: "C", mv: 6.4, fm: 7.5, gol: 12, assist: 7 },
-            { id: 10, nome: "Olivier Giroud", squadra: "Milan", ruolo: "A", mv: 6.17, fm: 7.63, gol: 15, assist: 8 },
-            { id: 11, nome: "Theo Hernández", squadra: "Milan", ruolo: "D", mv: 6.23, fm: 6.9, gol: 5, assist: 4 },
-            { id: 12, nome: "Mike Maignan", squadra: "Milan", ruolo: "P", mv: 6.21, fm: 4.86, gol_subiti: 34, rig_par: 1 },
-            { id: 13, nome: "Ruben Loftus-Cheek", squadra: "Milan", ruolo: "C", mv: 6.29, fm: 6.78, gol: 6, assist: 1 },
-            // JUVENTUS
-            { id: 14, nome: "Dušan Vlahović", squadra: "Juventus", ruolo: "A", mv: 6.24, fm: 7.73, gol: 16, assist: 4 },
-            { id: 15, nome: "Federico Chiesa", squadra: "Juventus", ruolo: "C", mv: 6.22, fm: 7.02, gol: 9, assist: 3 },
-            { id: 16, nome: "Gleison Bremer", squadra: "Juventus", ruolo: "D", mv: 6.18, fm: 6.35, gol: 3, assist: 0 },
-            { id: 17, nome: "Wojciech Szczęsny", squadra: "Juventus", ruolo: "P", mv: 6.26, fm: 5.2, gol_subiti: 28, rig_par: 1 },
-            { id: 18, nome: "Adrien Rabiot", squadra: "Juventus", ruolo: "C", mv: 6.22, fm: 6.64, gol: 5, assist: 3 },
-            // ATALANTA
-            { id: 19, nome: "Teun Koopmeiners", squadra: "Atalanta", ruolo: "C", mv: 6.41, fm: 7.66, gol: 12, assist: 4 },
-            { id: 20, nome: "Gianluca Scamacca", squadra: "Atalanta", ruolo: "A", mv: 6.13, fm: 7.33, gol: 12, assist: 5 },
-            { id: 21, nome: "Charles De Ketelaere", squadra: "Atalanta", ruolo: "C", mv: 6.32, fm: 7.39, gol: 10, assist: 8 },
-            { id: 22, nome: "Marco Carnesecchi", squadra: "Atalanta", ruolo: "P", mv: 6.35, fm: 5.1, gol_subiti: 25, rig_par: 2 },
-            { id: 23, nome: "Ademola Lookman", squadra: "Atalanta", ruolo: "A", mv: 6.08, fm: 6.88, gol: 9, assist: 6 },
-            // BOLOGNA
-            { id: 24, nome: "Joshua Zirkzee", squadra: "Bologna", ruolo: "A", mv: 6.51, fm: 7.36, gol: 11, assist: 5 },
-            { id: 25, nome: "Riccardo Orsolini", squadra: "Bologna", ruolo: "C", mv: 6.25, fm: 7.15, gol: 10, assist: 2 },
-            { id: 26, nome: "Lewis Ferguson", squadra: "Bologna", ruolo: "C", mv: 6.19, fm: 6.7, gol: 6, assist: 3 },
-            { id: 27, nome: "Riccardo Calafiori", squadra: "Bologna", ruolo: "D", mv: 6.32, fm: 6.37, gol: 0, assist: 5 },
-            // ROMA
-            { id: 28, nome: "Paulo Dybala", squadra: "Roma", ruolo: "A", mv: 6.6, fm: 8.32, gol: 13, assist: 9 },
-            { id: 29, nome: "Romelu Lukaku", squadra: "Roma", ruolo: "A", mv: 6.13, fm: 7.31, gol: 13, assist: 3 },
-            { id: 30, nome: "Lorenzo Pellegrini", squadra: "Roma", ruolo: "C", mv: 6.23, fm: 7.21, gol: 8, assist: 3 },
-            { id: 31, nome: "Gianluca Mancini", squadra: "Roma", ruolo: "D", mv: 5.92, fm: 6.13, gol: 1, assist: 1 },
-            // LAZIO
-            { id: 32, nome: "Ciro Immobile", squadra: "Lazio", ruolo: "A", mv: 5.79, fm: 6.55, gol: 7, assist: 1 },
-            { id: 33, nome: "Mattia Zaccagni", squadra: "Lazio", ruolo: "C", mv: 6.07, fm: 6.67, gol: 6, assist: 1 },
-            { id: 34, nome: "Luis Alberto", squadra: "Lazio", ruolo: "C", mv: 6.21, fm: 6.79, gol: 5, assist: 6 },
-            { id: 35, nome: "Ivan Provedel", squadra: "Lazio", ruolo: "P", mv: 6.25, fm: 5.06, gol_subiti: 27, rig_par: 0 },
-            // FIORENTINA
-            { id: 36, nome: "Nicolás González", squadra: "Fiorentina", ruolo: "C", mv: 6.18, fm: 7.42, gol: 12, assist: 2 },
-            { id: 37, nome: "Giacomo Bonaventura", squadra: "Fiorentina", ruolo: "C", mv: 6.27, fm: 6.97, gol: 8, assist: 3 },
-            { id: 38, nome: "Lucas Beltrán", squadra: "Fiorentina", ruolo: "A", mv: 5.86, fm: 6.38, gol: 6, assist: 2 },
-            // NAPOLI
-            { id: 39, nome: "Victor Osimhen", squadra: "Napoli", ruolo: "A", mv: 6.2, fm: 7.8, gol: 15, assist: 3 },
-            { id: 40, nome: "Kvicha Kvaratskhelia", squadra: "Napoli", ruolo: "C", mv: 6.39, fm: 7.59, gol: 11, assist: 6 },
-            { id: 41, nome: "Giovanni Di Lorenzo", squadra: "Napoli", ruolo: "D", mv: 5.93, fm: 6.14, gol: 1, assist: 6 },
-            { id: 42, nome: "Alex Meret", squadra: "Napoli", ruolo: "P", mv: 6.05, fm: 4.88, gol_subiti: 39, rig_par: 1 },
-            // GENOA
-            { id: 43, nome: "Albert Guðmundsson", squadra: "Genoa", ruolo: "C", mv: 6.42, fm: 7.8, gol: 14, assist: 4 },
-            { id: 44, nome: "Mateo Retegui", squadra: "Genoa", ruolo: "A", mv: 6.1, fm: 6.83, gol: 7, assist: 2 },
-            // TORINO
-            { id: 45, nome: "Duván Zapata", squadra: "Torino", ruolo: "A", mv: 6.2, fm: 7.21, gol: 12, assist: 4 },
-            { id: 46, nome: "Alessandro Buongiorno", squadra: "Torino", ruolo: "D", mv: 6.18, fm: 6.39, gol: 3, assist: 1 },
-            { id: 47, nome: "Vanja Milinković-Savić", squadra: "Torino", ruolo: "P", mv: 6.2, fm: 5.34, gol_subiti: 31, rig_par: 3 },
-            
-            // Más jugadores...
-            { id: 48, nome: "Matteo Politano", squadra: "Napoli", ruolo: "C", mv: 6.13, fm: 7.02, gol: 8, assist: 5 },
-            { id: 49, nome: "Andrea Colpani", squadra: "Monza", ruolo: "C", mv: 6.14, fm: 6.86, gol: 8, assist: 4 },
-            { id: 50, nome: "Michele Di Gregorio", squadra: "Monza", ruolo: "P", mv: 6.32, fm: 5.36, gol_subiti: 37, rig_par: 1 },
-            { id: 51, nome: "Matías Soulé", squadra: "Frosinone", ruolo: "C", mv: 6.28, fm: 7.23, gol: 11, assist: 3 },
-            { id: 52, nome: "Nico Williams", squadra: "Cagliari", ruolo: "A", mv: 6.0, fm: 6.5, gol: 5, assist: 4 }, // Ejemplo
-            { id: 53, nome: "Marten de Roon", squadra: "Atalanta", ruolo: "C", mv: 6.1, fm: 6.05, gol: 0, assist: 1 },
-            { id: 54, nome: "Davide Frattesi", squadra: "Inter", ruolo: "C", mv: 6.2, fm: 7.0, gol: 6, assist: 3 },
-            { id: 55, nome: "Benjamin Pavard", squadra: "Inter", ruolo: "D", mv: 6.2, fm: 6.2, gol: 0, assist: 1 },
-            { id: 56, nome: "Tijjani Reijnders", squadra: "Milan", ruolo: "C", mv: 6.1, fm: 6.3, gol: 3, assist: 3 },
-            { id: 57, nome: "Fikayo Tomori", squadra: "Milan", ruolo: "D", mv: 6.0, fm: 6.1, gol: 3, assist: 0 },
-            { id: 58, nome: "Kenan Yıldız", squadra: "Juventus", ruolo: "A", mv: 6.1, fm: 6.4, gol: 2, assist: 1 },
-            { id: 59, nome: "Weston McKennie", squadra: "Juventus", ruolo: "C", mv: 6.1, fm: 6.4, gol: 0, assist: 7 },
-            { id: 60, nome: "Samuele Ricci", squadra: "Torino", ruolo: "C", mv: 6.0, fm: 6.1, gol: 1, assist: 2 },
-            { id: 61, nome: "Khvicha Kvaratskhelia", squadra: "Napoli", ruolo: "A", mv: 6.39, fm: 7.59, gol: 11, assist: 6 }, // Duplicado de rol C, ajustado a A
-        ];
+        // ESTA SECCIÓN HA SIDO ELIMINADA Y SE CARGARÁ DESDE DATA_URL
         
         // --- INICIALIZACIÓN DE LA APP ---
 
         document.addEventListener('DOMContentLoaded', () => {
-            // No podemos inicializar Firebase aquí, esperamos al Auth
-            initAuth();
-            
-            // Poblamos los filtros
-            populateFilters();
-            
-            // Renderizamos la lista inicial de jugadores
-            renderPlayerList();
-            
-            // Añadimos listeners a los filtros
-            document.getElementById('filter-role').addEventListener('change', renderPlayerList);
-            document.getElementById('filter-team').addEventListener('change', renderPlayerList);
-            document.getElementById('sort-by').addEventListener('change', renderPlayerList);
-
-            // Listeners del Modal
-            document.getElementById('modal-cancel').addEventListener('click', closeModal);
+            // Iniciamos la carga de datos primero
+            initApp();
         });
+
+        async function initApp() {
+            const loadingText = document.getElementById('loading-players');
+            
+            if (!DATA_URL || DATA_URL === "PEGA_AQUÍ_TU_URL_RAW_DE_GIST" || DATA_URL === "") {
+                loadingText.innerHTML = `
+                    <p class="text-lg text-red-600">Error: Falta la URL de datos.</p>
+                    <p class="text-sm text-gray-500">Por favor, edita el archivo HTML y añade la URL de tu Gist en la variable DATA_URL.</p>
+                `;
+                return;
+            }
+
+            try {
+                loadingText.innerHTML = `<p class="text-lg text-gray-600">Cargando datos de jugadores...</p>`;
+                const response = await fetch(DATA_URL);
+                if (!response.ok) {
+                    throw new Error(`Error al cargar datos: ${response.statusText}`);
+                }
+                DB_GIOCATORI = await response.json();
+                
+                // Una vez cargados los datos, continuamos con la inicialización
+                initAuth();
+                populateFilters();
+                renderPlayerList();
+
+                // Añadimos listeners a los filtros
+                document.getElementById('filter-role').addEventListener('change', renderPlayerList);
+                document.getElementById('filter-team').addEventListener('change', renderPlayerList);
+                document.getElementById('sort-by').addEventListener('change', renderPlayerList);
+
+                // Listeners del Modal
+                document.getElementById('modal-cancel').addEventListener('click', closeModal);
+
+            } catch (error) {
+                console.error("Error al cargar datos de jugadores:", error);
+                loadingText.innerHTML = `
+                    <p class="text-lg text-red-600">Error al cargar datos.</p>
+                    <p class="text-sm text-gray-500">Verifica la URL de Gist y que el JSON sea válido.</p>
+                    <p class="text-xs text-gray-400 font-mono mt-2">${error.message}</p>
+                `;
+            }
+        }
 
         // --- LÓGICA DE AUTENTICACIÓN ---
 
@@ -365,8 +322,17 @@
         // --- LÓGICA DE RENDERIZADO (VISTAS) ---
 
         function populateFilters() {
+            // Asegurarnos que DB_GIOCATORI esté cargado
+            if (!DB_GIOCATORI || DB_GIOCATORI.length === 0) return;
+
             const teams = [...new Set(DB_GIOCATORI.map(p => p.squadra))].sort();
             const teamSelect = document.getElementById('filter-team');
+            
+            // Limpiamos opciones anteriores (excepto la primera)
+            while (teamSelect.options.length > 1) {
+                teamSelect.remove(1);
+            }
+
             teams.forEach(team => {
                 const option = document.createElement('option');
                 option.value = team;
@@ -379,7 +345,14 @@
             const grid = document.getElementById('player-grid');
             const loading = document.getElementById('loading-players');
             grid.innerHTML = ''; // Limpiamos el grid
-            loading.style.display = 'block';
+            
+            // Si DB_GIOCATORI aún no se ha cargado (porque falló initApp), no hacemos nada más.
+            if (!DB_GIOCATORI || DB_GIOCATORI.length === 0) {
+                loading.style.display = 'block'; // Mantenemos el mensaje de carga/error
+                return;
+            }
+            
+            loading.style.display = 'none'; // Ocultamos el mensaje de carga si hay datos
 
             // Obtenemos valores de filtros
             const roleFilter = document.getElementById('filter-role').value;
@@ -406,17 +379,14 @@
             });
 
             // 3. Renderizar
-            setTimeout(() => { // Simulamos una pequeña carga
-                loading.style.display = 'none';
-                if (filteredPlayers.length === 0) {
-                    grid.innerHTML = `<p class="text-gray-500 md:col-span-2 xl:col-span-3 text-center">No se encontraron jugadores con esos filtros.</p>`;
-                    return;
-                }
-                filteredPlayers.forEach(player => {
-                    const playerCard = createPlayerCard(player);
-                    grid.appendChild(playerCard);
-                });
-            }, 250);
+            if (filteredPlayers.length === 0) {
+                grid.innerHTML = `<p class="text-gray-500 md:col-span-2 xl:col-span-3 text-center">No se encontraron jugadores con esos filtros.</p>`;
+                return;
+            }
+            filteredPlayers.forEach(player => {
+                const playerCard = createPlayerCard(player);
+                grid.appendChild(playerCard);
+            });
         }
         
         function createPlayerCard(player) {
@@ -506,7 +476,10 @@
             document.getElementById('count-A').textContent = counts.A;
 
             // Actualizamos la lista de jugadores (para habilitar/deshabilitar botones)
-            renderPlayerList();
+            // Solo lo hacemos si los jugadores ya están cargados
+            if (DB_GIOCATORI.length > 0) {
+                renderPlayerList();
+            }
         }
 
         function createRosaRow(player, docId) {
@@ -556,6 +529,9 @@
                 
                 // Ordenamos por rol
                 currentRosa.sort((a, b) => {
+                    // Asegurarnos que DB_GIOCATORI esté cargado antes de ordenar
+                    if (DB_GIOCATORI.length === 0) return 0;
+                    
                     const playerA = DB_GIOCATORI.find(p => p.id === a.id);
                     const playerB = DB_GIOCATORI.find(p => p.id === b.id);
                     if (!playerA || !playerB) return 0;
@@ -567,13 +543,16 @@
                 renderMiaRosa(currentRosa);
             }, (error) => {
                 console.error("Error al cargar la plantilla (onSnapshot): ", error);
-                alert("Error al conectar con la base de datos. Revisa la consola.");
+                // No usamos alert()
+                console.error("Error al conectar con la base de datos.");
             });
         }
 
         async function addPlayerToRosa(playerId) {
             if (currentRosa.length >= 25) {
-                alert("Plantilla llena. No puedes añadir más de 25 jugadores.");
+                // No usamos alert()
+                console.warn("Plantilla llena. No puedes añadir más de 25 jugadores.");
+                // Podríamos mostrar un modal o un toast aquí
                 return;
             }
 
@@ -608,7 +587,8 @@
                 // onSnapshot actualizará la UI
             } catch (error) {
                 console.error("Error al eliminar jugador: ", error);
-                alert("Error al eliminar el jugador. Inténtalo de nuevo.");
+                // No usamos alert()
+                console.error("Error al eliminar el jugador. Inténtalo de nuevo.");
             }
         }
         
