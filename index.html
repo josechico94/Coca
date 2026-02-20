@@ -3,20 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Planificador de Rutas</title>
+  <title>Planificador de Rutas — Beta</title>
 
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
-
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
     * { font-family: 'DM Sans', sans-serif; }
-    .leaflet-container { background: #1a1a2e; }
+    .leaflet-container { background: #0b1220; }
     .custom-marker {
       background: linear-gradient(135deg, #6366f1, #8b5cf6);
       border: 3px solid #fff;
@@ -29,12 +26,24 @@
       animation: pulse 1.5s infinite;
     }
     @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-    .toast { animation: slideIn 0.3s ease-out; }
+    .toast { animation: slideIn 0.25s ease-out; }
     @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
     .address-card:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
-    .btn-primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); transition: all 0.3s ease; }
-    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4); }
+    .btn-primary { background: linear-gradient(135deg, #6366f1, #8b5cf6); transition: all 0.2s ease; }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(99, 102, 241, 0.35); }
+    .dragging { opacity: 0.55; }
+    .drop-hint { outline: 2px dashed rgba(99,102,241,0.9); outline-offset: 2px; }
     body { box-sizing: border-box; }
+    .suggestions {
+      position: absolute; z-index: 60; width: 100%;
+      max-height: 240px; overflow: auto;
+      border-radius: 14px; border: 1px solid rgba(148,163,184,0.25);
+      background: rgba(15,23,42,0.95); backdrop-filter: blur(10px);
+      box-shadow: 0 16px 45px rgba(0,0,0,0.45);
+    }
+    .suggestions button { display:block; width:100%; text-align:left; padding:10px 12px; font-size: 13px; }
+    .suggestions button:hover { background: rgba(99,102,241,0.12); }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
   </style>
 </head>
 
@@ -49,14 +58,13 @@
               d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
           </svg>
         </div>
-        <h1 id="app-title" class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-          Planificador de Rutas (Beta)
+        <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+          Planificador de Rutas — Beta
         </h1>
       </div>
 
       <div class="flex items-center gap-2">
         <span id="address-count" class="text-sm text-slate-400">0 direcciones</span>
-
         <button id="toggle-panel" class="lg:hidden p-2 rounded-lg bg-slate-700 hover:bg-slate-600" title="Abrir panel">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -69,21 +77,29 @@
     <main class="flex-1 flex overflow-hidden">
       <!-- Sidebar -->
       <aside id="sidebar"
-        class="w-full lg:w-96 bg-slate-800/50 backdrop-blur border-r border-slate-700 flex flex-col overflow-hidden absolute lg:relative z-20 h-full lg:h-auto transform -translate-x-full lg:translate-x-0 transition-transform">
+        class="w-full lg:w-[420px] bg-slate-800/50 backdrop-blur border-r border-slate-700 flex flex-col overflow-hidden absolute lg:relative z-20 h-full lg:h-auto transform -translate-x-full lg:translate-x-0 transition-transform">
 
         <!-- Add Address -->
         <div class="p-4 border-b border-slate-700 flex-shrink-0">
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Nueva Dirección</h2>
-
-            <button id="clear-all-btn" class="text-xs px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200">
-              Limpiar todo
-            </button>
+            <div class="flex gap-2">
+              <button id="backup-btn" class="text-xs px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200">
+                Backup JSON
+              </button>
+              <button id="clear-all-btn" class="text-xs px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200">
+                Limpiar todo
+              </button>
+            </div>
           </div>
 
-          <form id="address-form" class="space-y-3">
-            <input type="text" id="address-input" placeholder="Dirección completa..."
-              class="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all" />
+          <form id="address-form" class="space-y-3 relative">
+            <div class="relative">
+              <input type="text" id="address-input" placeholder="Dirección completa..."
+                class="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all" />
+              <div id="address-suggestions" class="suggestions hidden mt-2"></div>
+            </div>
+
             <div class="grid grid-cols-2 gap-3">
               <input type="text" id="zone-input" placeholder="Zona"
                 class="px-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl focus:outline-none focus:border-indigo-500 transition-all" />
@@ -91,29 +107,33 @@
                 class="px-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl focus:outline-none focus:border-indigo-500 transition-all" />
             </div>
 
-            <button type="submit" id="add-btn"
-              class="w-full py-3 btn-primary text-white font-semibold rounded-xl flex items-center justify-center gap-2">
+            <button type="submit" class="w-full py-3 btn-primary text-white font-semibold rounded-xl flex items-center justify-center gap-2">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
               </svg>
-              <span id="add-btn-text">Agregar Dirección</span>
+              Agregar Dirección
             </button>
           </form>
 
           <div class="grid grid-cols-2 gap-2 mt-3">
             <button id="toggle-import-form"
-              class="py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all text-sm">
-              Importar
+              class="py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition-all text-sm">
+              Importar CSV/Excel
             </button>
 
-            <button id="backup-btn"
-              class="py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all text-sm">
-              Backup JSON
-            </button>
+            <label class="py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition-all text-sm flex items-center justify-center cursor-pointer">
+              <input id="restore-input" type="file" accept=".json" class="hidden" />
+              Restaurar JSON
+            </label>
           </div>
 
+          <label class="flex items-center gap-2 text-xs text-slate-300 mt-3">
+            <input type="checkbox" id="append-bologna" class="accent-indigo-500" checked />
+            Autocompletar geocode: agregar “, Bologna, Italia” si no está
+          </label>
+
           <p class="text-xs text-slate-500 mt-2">
-            Beta tips: se guarda en tu navegador (localStorage). Para geocode, mejor incluir “Bologna, Italia”.
+            Se guarda en tu navegador (localStorage). Cache de geocoding activado.
           </p>
         </div>
 
@@ -124,10 +144,6 @@
           <div class="space-y-3">
             <div class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-500 transition-all"
               id="drop-zone">
-              <svg class="w-8 h-8 mx-auto mb-2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M12 4v16m8-8H4M9 9H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V11a2 2 0 00-2-2h-4m-6-2h6m0 0V7a2 2 0 00-2-2h-2a2 2 0 00-2 2v2z" />
-              </svg>
               <p class="text-sm font-medium">Arrastra tu archivo aquí</p>
               <p class="text-xs text-slate-400 mt-1">O haz clic para seleccionar</p>
               <input type="file" id="file-input" accept=".csv,.xlsx,.xls" class="hidden" />
@@ -135,26 +151,19 @@
 
             <div id="file-preview" class="hidden bg-slate-700/50 rounded-xl p-3">
               <p class="text-sm font-medium mb-2">
-                Archivo seleccionado: <span id="file-name" class="text-indigo-400"></span>
+                Archivo: <span id="file-name" class="text-indigo-400"></span>
               </p>
 
               <div class="space-y-2">
                 <select id="address-column" class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm">
-                  <option value="">Selecciona columna de Dirección</option>
+                  <option value="">Columna Dirección</option>
                 </select>
-
                 <select id="zone-column" class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm">
-                  <option value="">Selecciona columna de Zona (opcional)</option>
+                  <option value="">Columna Zona (opcional)</option>
                 </select>
-
                 <select id="postal-column" class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm">
-                  <option value="">Selecciona columna de Código Postal (opcional)</option>
+                  <option value="">Columna Código Postal (opcional)</option>
                 </select>
-
-                <label class="flex items-center gap-2 text-xs text-slate-300 mt-2">
-                  <input type="checkbox" id="append-bologna" class="accent-indigo-500" checked />
-                  Agregar “, Bologna, Italia” si no está
-                </label>
               </div>
 
               <div class="flex gap-2 mt-3">
@@ -169,7 +178,7 @@
               </div>
 
               <p class="text-xs text-slate-400 mt-2">
-                Import masivo: Nominatim puede limitar. Se aplica delay y cache automático.
+                Import masivo usa Nominatim: delay + cache para evitar bloqueos.
               </p>
             </div>
           </div>
@@ -180,23 +189,19 @@
           <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Filtros</h2>
 
           <div class="space-y-3">
-            <div class="relative">
-              <select id="zone-filter"
-                class="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl appearance-none focus:outline-none focus:border-indigo-500 cursor-pointer">
-                <option value="">Todas las zonas</option>
-              </select>
-            </div>
+            <select id="zone-filter"
+              class="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl focus:outline-none focus:border-indigo-500 cursor-pointer">
+              <option value="">Todas las zonas</option>
+            </select>
 
-            <div class="relative">
-              <select id="postal-filter"
-                class="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl appearance-none focus:outline-none focus:border-indigo-500 cursor-pointer">
-                <option value="">Todos los códigos postales</option>
-              </select>
-            </div>
+            <select id="postal-filter"
+              class="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl focus:outline-none focus:border-indigo-500 cursor-pointer">
+              <option value="">Todos los códigos postales</option>
+            </select>
 
             <div>
               <label class="text-sm text-slate-400 mb-1 block">
-                Radio de distancia: <span id="distance-value">50</span> km
+                Radio: <span id="distance-value">50</span> km
               </label>
               <input type="range" id="distance-filter" min="1" max="100" value="50"
                 class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
@@ -211,55 +216,85 @@
 
         <!-- Route Planner -->
         <div class="p-4 border-b border-slate-700 flex-shrink-0">
-          <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center justify-between mb-2">
             <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Percorso</h2>
-            <span id="selected-count" class="text-xs px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded-full">0/10 seleccionados</span>
+            <span id="selected-count" class="text-xs px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded-full">0/10</span>
           </div>
 
-          <p class="text-xs text-slate-500 mb-3">Seleccioná hasta 10 puntos y elegí inicio/fin (incluye “📍 Mi ubicación”).</p>
+          <p class="text-xs text-slate-500 mb-3">
+            Seleccioná hasta 10 puntos. Elegí inicio/fin (puede ser “📍 Mi ubicación”). Luego: optimizar o usar tu orden.
+          </p>
 
-          <div class="space-y-2 mb-3">
-            <label class="text-xs text-slate-400">Punto de partida</label>
-            <select id="start-select" class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm">
-              <option value="">Seleccionar...</option>
-              <option value="__GEO__">📍 Mi ubicación</option>
-              <option value="__NEW__">Nueva dirección...</option>
-            </select>
-            <input id="start-new" type="text"
-              class="hidden w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm"
-              placeholder="Escribí punto de partida (ej: Via Rizzoli 1, Bologna)" />
+          <div class="grid grid-cols-2 gap-2 mb-3">
+            <div class="relative">
+              <label class="text-xs text-slate-400">Inicio</label>
+              <select id="start-select" class="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm">
+                <option value="">Seleccionar...</option>
+                <option value="__GEO__">📍 Mi ubicación</option>
+                <option value="__NEW__">Nueva dirección...</option>
+              </select>
+              <input id="start-new" type="text"
+                class="hidden w-full mt-2 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm"
+                placeholder="Inicio (ej: Via Rizzoli 1)" />
+              <div id="start-suggestions" class="suggestions hidden mt-2"></div>
+            </div>
+
+            <div class="relative">
+              <label class="text-xs text-slate-400">Fin</label>
+              <select id="end-select" class="w-full mt-1 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm">
+                <option value="">Seleccionar...</option>
+                <option value="__GEO__">📍 Mi ubicación</option>
+                <option value="__NEW__">Nueva dirección...</option>
+              </select>
+              <input id="end-new" type="text"
+                class="hidden w-full mt-2 px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm"
+                placeholder="Fin" />
+              <div id="end-suggestions" class="suggestions hidden mt-2"></div>
+            </div>
           </div>
 
-          <div class="space-y-2 mb-3">
-            <label class="text-xs text-slate-400">Punto de finalización</label>
-            <select id="end-select" class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm">
-              <option value="">Seleccionar...</option>
-              <option value="__GEO__">📍 Mi ubicación</option>
-              <option value="__NEW__">Nueva dirección...</option>
-            </select>
-            <input id="end-new" type="text"
-              class="hidden w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm"
-              placeholder="Escribí punto de finalización" />
-          </div>
-
-          <div class="flex gap-2">
-            <button id="calc-route-btn"
-              class="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          <div class="grid grid-cols-2 gap-2">
+            <button id="optimize-route-btn"
+              class="py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               disabled>
-              Calcular Ruta Óptima
+              Optimizar
             </button>
+            <button id="calc-route-btn"
+              class="py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled>
+              Calcular con mi orden
+            </button>
+          </div>
 
-            <button id="clear-route-btn"
-              class="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-all" title="Limpiar ruta">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+          <div class="flex gap-2 mt-2">
+            <button id="clear-route-btn" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold transition-all text-sm">
+              Limpiar selección/ruta
+            </button>
+          </div>
+
+          <div class="flex gap-2 mt-3">
+            <button id="export-gpx-btn" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold transition-all text-sm disabled:opacity-50" disabled>
+              Export GPX
+            </button>
+            <button id="export-kml-btn" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold transition-all text-sm disabled:opacity-50" disabled>
+              Export KML
             </button>
           </div>
 
           <p class="text-[11px] text-slate-500 mt-2">
-            Optimiza por tiempos reales (OSRM). Si OSRM falla, usa aproximación por distancia.
+            Optimizar usa OSRM (tiempos reales). “Mi orden” respeta el drag&drop. Export desde geometría real.
           </p>
+        </div>
+
+        <!-- Route order (Drag & Drop) -->
+        <div class="p-4 border-b border-slate-700 flex-shrink-0">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Orden de visita</h3>
+            <span class="text-xs text-slate-500">Drag & drop</span>
+          </div>
+          <div id="route-order" class="space-y-2">
+            <p class="text-xs text-slate-500">Seleccioná direcciones para armar el orden acá.</p>
+          </div>
         </div>
 
         <!-- Address List -->
@@ -273,31 +308,60 @@
       <div class="flex-1 relative">
         <div id="map" class="absolute inset-0"></div>
 
-        <!-- Route Info -->
+        <!-- Route info panel -->
         <div id="route-info"
-          class="absolute top-4 right-4 bg-slate-800/90 backdrop-blur-lg rounded-2xl p-4 shadow-xl border border-slate-700 hidden max-w-xs">
-          <h3 class="font-bold text-lg mb-2 flex items-center justify-between gap-2">
-            <span class="flex items-center gap-2">
-              <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-              </svg>
-              Ruta
-            </span>
-
+          class="absolute top-4 right-4 bg-slate-800/90 backdrop-blur-lg rounded-2xl p-4 shadow-xl border border-slate-700 hidden w-[320px]">
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <h3 class="font-bold text-lg">Ruta</h3>
             <button id="open-gmaps-btn" class="text-xs px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600">
-              Abrir en Google Maps
+              Google Maps
             </button>
-          </h3>
-
+          </div>
           <div id="route-details" class="text-sm text-slate-300 space-y-1"></div>
         </div>
 
-        <!-- Loading -->
+        <!-- Navigation panel -->
+        <div id="nav-panel"
+          class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-lg rounded-2xl p-4 shadow-xl border border-slate-700 hidden w-[min(760px,calc(100vw-32px))]">
+          <div class="flex items-center justify-between gap-3">
+            <div class="min-w-0">
+              <p class="text-xs text-slate-400">Navegación</p>
+              <p id="nav-next" class="font-semibold truncate">—</p>
+              <p id="nav-sub" class="text-xs text-slate-400">—</p>
+            </div>
+            <div class="flex gap-2 flex-shrink-0">
+              <button id="nav-start-btn" class="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 font-semibold text-sm">
+                Start
+              </button>
+              <button id="nav-sim-btn" class="px-3 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 font-semibold text-sm">
+                Simular
+              </button>
+              <button id="nav-stop-btn" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-semibold text-sm">
+                Stop
+              </button>
+              <button id="nav-toggle-steps" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-semibold text-sm">
+                Pasos
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+              <div id="nav-progress" class="h-2 bg-emerald-500 w-0"></div>
+            </div>
+          </div>
+
+          <div id="nav-steps" class="hidden mt-3 max-h-[180px] overflow-auto rounded-xl border border-slate-700 bg-slate-900/40">
+            <div id="nav-steps-inner" class="p-3 space-y-2 text-sm"></div>
+          </div>
+        </div>
+
+        <!-- Loading Overlay -->
         <div id="loading" class="absolute inset-0 bg-slate-900/80 backdrop-blur flex items-center justify-center hidden z-30">
           <div class="text-center">
             <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p id="loading-text" class="text-slate-300">Procesando...</p>
+            <p id="loading-sub" class="text-xs text-slate-500 mt-2"></p>
           </div>
         </div>
       </div>
@@ -309,12 +373,6 @@
     <!-- Delete Modal -->
     <div id="delete-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 hidden">
       <div class="bg-slate-800 rounded-2xl p-6 max-w-sm mx-4 border border-slate-700 shadow-2xl">
-        <div class="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-        </div>
         <h3 class="text-lg font-bold text-center mb-2">¿Eliminar dirección?</h3>
         <p id="delete-address-text" class="text-sm text-slate-400 text-center mb-6">Esta acción no se puede deshacer.</p>
         <div class="flex gap-3">
@@ -328,40 +386,51 @@
   <script>
     // ========= CONFIG =========
     const config = {
-      appTitle: "Planificador de Rutas (Beta)",
       maxAddresses: 999,
       maxRoutePoints: 10,
       importGeocodeDelayMs: 850,
-      defaultCenter: [44.4949, 11.3426], // Bologna
+      defaultCenter: [44.4949, 11.3426],
       defaultZoom: 13,
 
-      storageKey: "route_planner_beta_v1",
-      geocodeCacheKey: "route_planner_geocode_cache_v1"
+      storageKey: "route_planner_beta_v2_state",
+      geocodeCacheKey: "route_planner_beta_v2_geocode_cache",
+      autocompleteDelayMs: 250
     };
 
     // ========= STATE =========
     let addresses = [];
-    let selectedIds = [];
+    let selectedIds = [];         // seleccionados “intermedios”
+    let visitOrderIds = [];       // orden drag&drop (solo ids seleccionados)
     let markers = {};
     let map = null;
 
-    let routeLayer = null;
+    let routeLayer = null;        // L.GeoJSON / L.Polyline
     let routeNumberMarkers = [];
     let deleteTargetId = null;
     let importedData = null;
 
-    let startPoint = null; // { lat, lng, address }
-    let endPoint = null;   // { lat, lng, address }
-    let lastOrderedRoutePoints = null; // para Google Maps link
+    let startPoint = null;        // {lat,lng,address}
+    let endPoint = null;          // {lat,lng,address}
+    let lastOrderedRoutePoints = null; // [{lat,lng,address}]
+    let lastRouteGeoCoords = null;     // [[lng,lat], ...] de OSRM geometry (geojson)
+    let lastRouteSteps = null;         // pasos OSRM
+
+    // Navigation state
+    let navMarker = null;
+    let navWatchId = null;
+    let navSimTimer = null;
+    let navStepIndex = 0;
+    let navTotalDistance = 0; // meters
+    let navTraveledApprox = 0;
 
     // caches
-    let geocodeCache = {}; // { "query": {lat,lng} }
-
-    // ========= UTILS =========
+    let geocodeCache = {}; // {query -> {lat,lng}}
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-    function setLoading(isLoading, text = "Procesando...") {
+    // ========= UI helpers =========
+    function setLoading(isLoading, text = "Procesando...", sub = "") {
       document.getElementById("loading-text").textContent = text;
+      document.getElementById("loading-sub").textContent = sub || "";
       document.getElementById("loading").classList.toggle("hidden", !isLoading);
     }
 
@@ -378,24 +447,14 @@
 
       toast.className = `toast ${colors[type] || colors.info} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2`;
       toast.innerHTML = `
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          ${type === "success"
-            ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>'
-            : type === "error"
-            ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>'
-            : type === "warning"
-            ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>'
-            : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>'
-          }
-        </svg>
-        <span>${message}</span>
+        <span class="text-sm">${escapeHtml(message)}</span>
       `;
       container.appendChild(toast);
       setTimeout(() => toast.remove(), 3200);
     }
 
-    // Haversine (km)
-    function getDistance(lat1, lon1, lat2, lon2) {
+    // Haversine km
+    function getDistanceKm(lat1, lon1, lat2, lon2) {
       const R = 6371;
       const dLat = (lat2 - lat1) * Math.PI / 180;
       const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -406,6 +465,8 @@
       return R * c;
     }
 
+    function kmToMeters(km){ return km * 1000; }
+
     function normalizeAddressForGeocode(addr) {
       const shouldAppend = document.getElementById("append-bologna")?.checked ?? true;
       if (!shouldAppend) return addr;
@@ -414,14 +475,22 @@
       return `${addr}, Bologna, Italia`;
     }
 
-    // ========= PERSISTENCE =========
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+    function escapeAttr(str) { return escapeHtml(str).replaceAll("`", "&#096;"); }
+
+    // ========= Persistence =========
     function saveState() {
       try {
         const payload = { addresses };
         localStorage.setItem(config.storageKey, JSON.stringify(payload));
-      } catch (e) {
-        console.warn("saveState failed", e);
-      }
+      } catch (e) {}
     }
 
     function loadState() {
@@ -430,15 +499,11 @@
         if (!raw) return;
         const parsed = JSON.parse(raw);
         if (parsed?.addresses && Array.isArray(parsed.addresses)) addresses = parsed.addresses;
-      } catch (e) {
-        console.warn("loadState failed", e);
-      }
+      } catch (e) {}
     }
 
     function saveGeocodeCache() {
-      try {
-        localStorage.setItem(config.geocodeCacheKey, JSON.stringify(geocodeCache));
-      } catch {}
+      try { localStorage.setItem(config.geocodeCacheKey, JSON.stringify(geocodeCache)); } catch {}
     }
 
     function loadGeocodeCache() {
@@ -450,7 +515,7 @@
       } catch {}
     }
 
-    // ========= MAP =========
+    // ========= Map =========
     function initMap() {
       map = L.map("map", {
         center: config.defaultCenter,
@@ -465,26 +530,37 @@
       }).addTo(map);
     }
 
-    async function geocodeAddress(addressQuery) {
-      const q = addressQuery.trim();
+    async function geocodeAddress(query) {
+      const q = query.trim();
       if (!q) return null;
-
-      // cache hit
       if (geocodeCache[q]) return geocodeCache[q];
 
-      const enc = encodeURIComponent(q);
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${enc}&limit=1`;
-
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`;
       const res = await fetch(url, { headers: { "Accept": "application/json" } });
       if (!res.ok) return null;
       const data = await res.json();
-      if (data && data.length > 0) {
+      if (data && data.length) {
         const coords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
         geocodeCache[q] = coords;
         saveGeocodeCache();
         return coords;
       }
       return null;
+    }
+
+    // Nominatim autocomplete
+    async function searchAutocomplete(query) {
+      const q = query.trim();
+      if (!q || q.length < 3) return [];
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&addressdetails=1&limit=6`;
+      const res = await fetch(url, { headers: { "Accept": "application/json" } });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data || []).map(d => ({
+        label: d.display_name,
+        lat: parseFloat(d.lat),
+        lng: parseFloat(d.lon)
+      }));
     }
 
     function createMarker(addr, isSelected = false) {
@@ -514,16 +590,15 @@
       const filtered = getFilteredAddresses();
       filtered.forEach(addr => {
         if (addr.lat && addr.lng) {
-          const isSelected = selectedIds.includes(addr.id);
-          markers[addr.id] = createMarker(addr, isSelected);
+          markers[addr.id] = createMarker(addr, selectedIds.includes(addr.id));
         }
       });
 
       const bounds = filtered.filter(a => a.lat && a.lng).map(a => [a.lat, a.lng]);
-      if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
+      if (bounds.length) map.fitBounds(bounds, { padding: [50, 50] });
     }
 
-    // ========= FILTERS =========
+    // ========= Filters =========
     function getFilteredAddresses() {
       const zoneFilter = document.getElementById("zone-filter").value;
       const postalFilter = document.getElementById("postal-filter").value;
@@ -533,12 +608,9 @@
       if (zoneFilter) filtered = filtered.filter(a => a.zone === zoneFilter);
       if (postalFilter) filtered = filtered.filter(a => a.postal_code === postalFilter);
 
-      if (distanceFilter < 100 && filtered.length > 0 && map) {
+      if (distanceFilter < 100 && filtered.length && map) {
         const center = map.getCenter();
-        filtered = filtered.filter(a => {
-          if (!a.lat || !a.lng) return false;
-          return getDistance(center.lat, center.lng, a.lat, a.lng) <= distanceFilter;
-        });
+        filtered = filtered.filter(a => a.lat && a.lng && getDistanceKm(center.lat, center.lng, a.lat, a.lng) <= distanceFilter);
       }
       return filtered;
     }
@@ -553,18 +625,42 @@
       const currentZone = zoneSelect.value;
       const currentPostal = postalSelect.value;
 
-      zoneSelect.innerHTML = `<option value="">Todas las zonas</option>` +
-        zones.map(z => `<option value="${escapeAttr(z)}" ${z === currentZone ? "selected" : ""}>${escapeHtml(z)}</option>`).join("");
-
-      postalSelect.innerHTML = `<option value="">Todos los códigos postales</option>` +
-        postals.map(p => `<option value="${escapeAttr(p)}" ${p === currentPostal ? "selected" : ""}>${escapeHtml(p)}</option>`).join("");
+      zoneSelect.innerHTML = `<option value="">Todas las zonas</option>` + zones.map(z => `<option value="${escapeAttr(z)}" ${z===currentZone?"selected":""}>${escapeHtml(z)}</option>`).join("");
+      postalSelect.innerHTML = `<option value="">Todos los códigos postales</option>` + postals.map(p => `<option value="${escapeAttr(p)}" ${p===currentPostal?"selected":""}>${escapeHtml(p)}</option>`).join("");
     }
 
-    // ========= START/END SELECTORS =========
+    // ========= Selection + visit order =========
+    function toggleAddressSelection(id) {
+      const idx = selectedIds.indexOf(id);
+      if (idx > -1) {
+        selectedIds.splice(idx, 1);
+        visitOrderIds = visitOrderIds.filter(x => x !== id);
+      } else {
+        if (selectedIds.length >= config.maxRoutePoints) {
+          showToast(`Máximo ${config.maxRoutePoints} puntos intermedios`, "warning");
+          return;
+        }
+        selectedIds.push(id);
+        visitOrderIds.push(id);
+      }
+
+      updateUI();
+      updateMarkers();
+    }
+
+    function syncVisitOrderWithSelected() {
+      // asegura que visitOrderIds contenga exactamente selectedIds en algún orden
+      const setSel = new Set(selectedIds);
+      visitOrderIds = visitOrderIds.filter(id => setSel.has(id));
+      selectedIds.forEach(id => {
+        if (!visitOrderIds.includes(id)) visitOrderIds.push(id);
+      });
+    }
+
+    // ========= Start/End =========
     function updateStartEndSelectors() {
       const startSel = document.getElementById("start-select");
       const endSel = document.getElementById("end-select");
-      if (!startSel || !endSel) return;
 
       const prevStart = startSel.value;
       const prevEnd = endSel.value;
@@ -591,7 +687,10 @@
       document.getElementById("start-new").classList.toggle("hidden", startSel.value !== "__NEW__");
       document.getElementById("end-new").classList.toggle("hidden", endSel.value !== "__NEW__");
 
-      document.getElementById("calc-route-btn").disabled = selectedIds.length < 1;
+      // habilitar botones
+      const ok = selectedIds.length >= 1;
+      document.getElementById("optimize-route-btn").disabled = !ok;
+      document.getElementById("calc-route-btn").disabled = !ok;
     }
 
     async function getBrowserLocationPoint() {
@@ -606,42 +705,61 @@
       });
     }
 
-    // ========= SELECTION =========
-    function toggleAddressSelection(id) {
-      const i = selectedIds.indexOf(id);
-      if (i > -1) selectedIds.splice(i, 1);
-      else {
-        if (selectedIds.length >= config.maxRoutePoints) {
-          showToast(`Máximo ${config.maxRoutePoints} puntos para el percorso`, "warning");
-          return;
-        }
-        selectedIds.push(id);
+    function pointFromExisting(id) {
+      const a = addresses.find(x => x.id === id);
+      if (!a || !a.lat || !a.lng) return null;
+      return { lat: a.lat, lng: a.lng, address: a.address };
+    }
+
+    async function resolveStartEnd() {
+      const startSelVal = document.getElementById("start-select").value;
+      const endSelVal = document.getElementById("end-select").value;
+      const startNew = document.getElementById("start-new").value.trim();
+      const endNew = document.getElementById("end-new").value.trim();
+
+      if (!startSelVal) throw new Error("Elegí un punto de partida");
+      if (!endSelVal) throw new Error("Elegí un punto de finalización");
+
+      // START
+      if (startSelVal === "__GEO__") {
+        setLoading(true, "Obteniendo ubicación...", "Inicio");
+        const p = await getBrowserLocationPoint();
+        if (!p) throw new Error("No pude obtener tu ubicación (permiso?)");
+        startPoint = p;
+      } else if (startSelVal === "__NEW__") {
+        if (!startNew) throw new Error("Ingresá dirección de partida");
+        setLoading(true, "Geocodificando...", "Inicio");
+        const c = await geocodeAddress(normalizeAddressForGeocode(startNew));
+        if (!c) throw new Error("No pude geocodificar el inicio");
+        startPoint = { ...c, address: startNew };
+      } else {
+        const p = pointFromExisting(startSelVal);
+        if (!p) throw new Error("Inicio inválido");
+        startPoint = p;
       }
-      updateUI();
-      updateMarkers();
-    }
 
-    // ========= ROUTE LAYERS =========
-    function clearRouteLayersOnly() {
-      if (routeLayer) {
-        map.removeLayer(routeLayer);
-        routeLayer = null;
+      // END
+      if (endSelVal === "__GEO__") {
+        setLoading(true, "Obteniendo ubicación...", "Fin");
+        const p = await getBrowserLocationPoint();
+        if (!p) throw new Error("No pude obtener tu ubicación (permiso?)");
+        endPoint = p;
+      } else if (endSelVal === "__NEW__") {
+        if (!endNew) throw new Error("Ingresá dirección de fin");
+        setLoading(true, "Geocodificando...", "Fin");
+        const c = await geocodeAddress(normalizeAddressForGeocode(endNew));
+        if (!c) throw new Error("No pude geocodificar el fin");
+        endPoint = { ...c, address: endNew };
+      } else {
+        const p = pointFromExisting(endSelVal);
+        if (!p) throw new Error("Fin inválido");
+        endPoint = p;
       }
-      routeNumberMarkers.forEach(m => map.removeLayer(m));
-      routeNumberMarkers = [];
-      lastOrderedRoutePoints = null;
 
-      document.getElementById("route-info").classList.add("hidden");
+      return { startPoint, endPoint };
     }
 
-    function clearRoute() {
-      selectedIds = [];
-      clearRouteLayersOnly();
-      updateUI();
-      updateMarkers();
-    }
-
-    // ========= OSRM + OPTIMAL =========
+    // ========= Route / OSRM =========
     function toLonLat(points) { return points.map(p => `${p.lng},${p.lat}`).join(";"); }
 
     async function osrmTableDriving(points) {
@@ -652,14 +770,15 @@
       return await res.json();
     }
 
-    async function osrmRouteDriving(orderedPoints) {
+    async function osrmRouteDriving(orderedPoints, withSteps = true) {
       const coords = toLonLat(orderedPoints);
-      const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=false`;
+      const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=${withSteps ? "true" : "false"}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("OSRM route failed");
       return await res.json();
     }
 
+    // DP exacto (hasta 10) con start/end fijos, por durations matrix
     function solveOptimalPathFixedStartEnd(matrix, startIdx, endIdx, waypointIdxs) {
       const n = waypointIdxs.length;
       if (n === 0) return [startIdx, endIdx];
@@ -668,8 +787,8 @@
       const parent = Array.from({ length: 1 << n }, () => Array(n).fill(-1));
 
       for (let i = 0; i < n; i++) {
-        const wIdx = waypointIdxs[i];
-        DP[1 << i][i] = matrix[startIdx][wIdx];
+        const w = waypointIdxs[i];
+        DP[1 << i][i] = matrix[startIdx][w];
       }
 
       for (let mask = 0; mask < (1 << n); mask++) {
@@ -712,41 +831,41 @@
         cur = prev;
       }
       orderWaypoints.reverse();
-
       return [startIdx, ...orderWaypoints, endIdx];
     }
 
-    function nearestNeighborFixed(points) {
-      if (points.length <= 2) return points;
-      const start = points[0];
-      const end = points[points.length - 1];
-      const remaining = points.slice(1, -1);
-      const route = [start];
-      let cur = start;
-
-      while (remaining.length) {
-        let bestI = 0, bestD = Infinity;
-        for (let i = 0; i < remaining.length; i++) {
-          const p = remaining[i];
-          const d = getDistance(cur.lat, cur.lng, p.lat, p.lng);
-          if (d < bestD) { bestD = d; bestI = i; }
-        }
-        cur = remaining.splice(bestI, 1)[0];
-        route.push(cur);
-      }
-      route.push(end);
-      return route;
+    function clearRouteLayersOnly() {
+      stopNavigation(); // si estaba en navegación, cortar
+      if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
+      routeNumberMarkers.forEach(m => map.removeLayer(m));
+      routeNumberMarkers = [];
+      lastOrderedRoutePoints = null;
+      lastRouteGeoCoords = null;
+      lastRouteSteps = null;
+      navStepIndex = 0;
+      navTraveledApprox = 0;
+      document.getElementById("route-info").classList.add("hidden");
+      document.getElementById("nav-panel").classList.add("hidden");
+      document.getElementById("export-gpx-btn").disabled = true;
+      document.getElementById("export-kml-btn").disabled = true;
     }
 
-    function drawRouteSimplePolyline(route) {
+    function clearRouteAll() {
+      selectedIds = [];
+      visitOrderIds = [];
       clearRouteLayersOnly();
-      const latlngs = route.map(p => [p.lat, p.lng]);
+      updateUI();
+      updateMarkers();
+    }
 
-      routeLayer = L.polyline(latlngs, {
-        color: "#6366f1", weight: 4, opacity: 0.85, dashArray: "10, 10", lineCap: "round"
-      }).addTo(map);
+    function drawRouteAndMarkers(orderedPoints, geojsonGeometry) {
+      clearRouteLayersOnly();
 
-      routeNumberMarkers = route.map((p, idx) => {
+      // draw route geometry
+      routeLayer = L.geoJSON(geojsonGeometry, { style: { color: "#6366f1", weight: 4, opacity: 0.95 } }).addTo(map);
+
+      // numbered markers
+      routeNumberMarkers = orderedPoints.map((p, idx) => {
         return L.marker([p.lat, p.lng], {
           icon: L.divIcon({
             className: "route-number-marker",
@@ -757,229 +876,466 @@
         }).addTo(map);
       });
 
-      map.fitBounds(latlngs, { padding: [50, 50] });
+      const bounds = orderedPoints.map(p => [p.lat, p.lng]);
+      map.fitBounds(bounds, { padding: [50, 50] });
     }
 
-    function showRouteInfoWithTotals(route, distKm, durMin) {
-      lastOrderedRoutePoints = route;
+    function showRouteInfo(orderedPoints, distKm, durMin) {
+      lastOrderedRoutePoints = orderedPoints;
 
       const panel = document.getElementById("route-info");
       const details = document.getElementById("route-details");
 
       let html = `<ol class="list-decimal list-inside space-y-1">`;
-      route.forEach(p => html += `<li class="truncate">${escapeHtml(p.address)}</li>`);
+      orderedPoints.forEach(p => html += `<li class="truncate">${escapeHtml(p.address)}</li>`);
       html += `</ol>`;
+
       html += `
         <div class="mt-3 pt-3 border-t border-slate-600">
           <p class="font-semibold text-emerald-400">Distancia total: ${distKm.toFixed(2)} km</p>
           <p class="text-xs text-slate-400 mt-1">Duración total: ${Math.round(durMin)} min</p>
         </div>
+        <div class="mt-3 flex gap-2">
+          <button id="nav-open-btn" class="flex-1 px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 font-semibold text-sm">Navegar</button>
+          <button id="nav-hide-btn" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-semibold text-sm">Ocultar</button>
+        </div>
       `;
 
       details.innerHTML = html;
       panel.classList.remove("hidden");
+
+      // attach nav buttons
+      document.getElementById("nav-open-btn").onclick = () => openNavPanel();
+      document.getElementById("nav-hide-btn").onclick = () => panel.classList.add("hidden");
     }
 
-    async function calculateRoute() {
+    // build Google Maps URL
+    function buildGoogleMapsDirectionsUrl(points) {
+      if (!points || points.length < 2) return null;
+      const originFixed = (points[0].address === "Mi ubicación") ? `${points[0].lat},${points[0].lng}` : points[0].address;
+      const destFixed = (points[points.length - 1].address === "Mi ubicación") ? `${points[points.length - 1].lat},${points[points.length - 1].lng}` : points[points.length - 1].address;
+
+      let url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=${encodeURIComponent(originFixed)}&destination=${encodeURIComponent(destFixed)}`;
+      const wps = points.slice(1, -1).map(p => (p.address === "Mi ubicación") ? `${p.lat},${p.lng}` : p.address);
+      if (wps.length) url += `&waypoints=${encodeURIComponent(wps.join("|"))}`;
+      return url;
+    }
+
+    // ========= Calculate routes =========
+    function buildMidpointsFromVisitOrder() {
+      syncVisitOrderWithSelected();
+      return visitOrderIds
+        .map(id => addresses.find(a => a.id === id))
+        .filter(Boolean)
+        .filter(a => a.lat && a.lng)
+        .map(a => ({ lat: a.lat, lng: a.lng, address: a.address, _id: a.id }));
+    }
+
+    async function calculateWithUserOrder() {
       try {
-        if (selectedIds.length < 1) { showToast("Seleccioná al menos 1 punto intermedio", "warning"); return; }
+        if (selectedIds.length < 1) { showToast("Seleccioná al menos 1 punto", "warning"); return; }
+        setLoading(true, "Preparando ruta...", "Resolviendo inicio/fin");
+        await resolveStartEnd();
 
-        const startSelVal = document.getElementById("start-select").value;
-        const endSelVal = document.getElementById("end-select").value;
-        const startNew = document.getElementById("start-new").value.trim();
-        const endNew = document.getElementById("end-new").value.trim();
+        const mid = buildMidpointsFromVisitOrder();
+        if (!mid.length) throw new Error("No hay puntos intermedios válidos");
 
-        if (!startSelVal) { showToast("Elegí un punto de partida", "warning"); return; }
-        if (!endSelVal) { showToast("Elegí un punto de finalización", "warning"); return; }
+        const points = [startPoint, ...mid, endPoint];
 
-        setLoading(true, "Preparando inicio/fin...");
+        setLoading(true, "Trazando ruta por calles (OSRM)...", "Respetando tu orden");
+        const routeRes = await osrmRouteDriving(points, true);
+        if (!routeRes.routes?.length) throw new Error("OSRM route vacío");
 
-        const pointFromExisting = (id) => {
-          const a = addresses.find(x => x.id === id);
-          if (!a || !a.lat || !a.lng) return null;
-          return { lat: a.lat, lng: a.lng, address: a.address };
-        };
+        const route = routeRes.routes[0];
+        const geo = route.geometry;                 // geojson linestring
+        lastRouteGeoCoords = geo.coordinates;       // [ [lng,lat], ... ]
+        lastRouteSteps = extractSteps(routeRes);
+        navTotalDistance = route.distance;
 
-        // START
-        if (startSelVal === "__GEO__") {
-          setLoading(true, "Obteniendo tu ubicación...");
-          const p = await getBrowserLocationPoint();
-          if (!p) { setLoading(false); showToast("No pude obtener tu ubicación (permiso?)", "error"); return; }
-          startPoint = p;
-        } else if (startSelVal === "__NEW__") {
-          if (!startNew) { setLoading(false); showToast("Ingresá dirección de partida", "warning"); return; }
-          setLoading(true, "Geocodificando punto de partida...");
-          const c = await geocodeAddress(normalizeAddressForGeocode(startNew));
-          if (!c) { setLoading(false); showToast("No pude geocodificar el punto de partida", "error"); return; }
-          startPoint = { ...c, address: startNew };
-        } else {
-          const p = pointFromExisting(startSelVal);
-          if (!p) { setLoading(false); showToast("Punto de partida inválido", "error"); return; }
-          startPoint = p;
-        }
+        drawRouteAndMarkers(points, geo);
+        showRouteInfo(points, route.distance / 1000, route.duration / 60);
 
-        // END
-        if (endSelVal === "__GEO__") {
-          setLoading(true, "Obteniendo tu ubicación...");
-          const p = await getBrowserLocationPoint();
-          if (!p) { setLoading(false); showToast("No pude obtener tu ubicación (permiso?)", "error"); return; }
-          endPoint = p;
-        } else if (endSelVal === "__NEW__") {
-          if (!endNew) { setLoading(false); showToast("Ingresá dirección de finalización", "warning"); return; }
-          setLoading(true, "Geocodificando punto final...");
-          const c = await geocodeAddress(normalizeAddressForGeocode(endNew));
-          if (!c) { setLoading(false); showToast("No pude geocodificar el punto final", "error"); return; }
-          endPoint = { ...c, address: endNew };
-        } else {
-          const p = pointFromExisting(endSelVal);
-          if (!p) { setLoading(false); showToast("Punto final inválido", "error"); return; }
-          endPoint = p;
-        }
+        document.getElementById("export-gpx-btn").disabled = false;
+        document.getElementById("export-kml-btn").disabled = false;
 
-        // MIDPOINTS
-        const mid = selectedIds
-          .map(id => addresses.find(a => a.id === id))
-          .filter(Boolean)
-          .filter(a => a.lat && a.lng)
-          .map(a => ({ lat: a.lat, lng: a.lng, address: a.address, _id: a.id }));
+        setLoading(false);
+        showToast("Ruta calculada (tu orden) ✅", "success");
+      } catch (e) {
+        setLoading(false);
+        showToast(e.message || "Error", "error");
+      }
+    }
 
-        const startId = (startSelVal !== "__NEW__" && startSelVal !== "__GEO__") ? startSelVal : null;
-        const endId = (endSelVal !== "__NEW__" && endSelVal !== "__GEO__") ? endSelVal : null;
-        const midFiltered = mid.filter(p => p._id !== startId && p._id !== endId);
+    async function optimizeRoute() {
+      try {
+        if (selectedIds.length < 1) { showToast("Seleccioná al menos 1 punto", "warning"); return; }
+        setLoading(true, "Preparando optimización...", "Resolviendo inicio/fin");
+        await resolveStartEnd();
 
-        if (midFiltered.length === 0) {
-          setLoading(false);
-          showToast("Seleccioná al menos 1 punto intermedio distinto de inicio/fin", "warning");
-          return;
-        }
-        if (midFiltered.length > config.maxRoutePoints) {
-          setLoading(false);
-          showToast(`Máximo ${config.maxRoutePoints} puntos intermedios`, "warning");
-          return;
-        }
+        const mid = buildMidpointsFromVisitOrder();
+        if (!mid.length) throw new Error("No hay puntos intermedios válidos");
 
-        const points = [startPoint, ...midFiltered, endPoint];
+        const points = [startPoint, ...mid, endPoint];
 
-        // OSRM matrix
-        setLoading(true, "Calculando matriz de tiempos (OSRM)...");
-        let table;
-        try {
-          table = await osrmTableDriving(points);
-        } catch (e) {
-          console.error(e);
-          setLoading(false);
-          showToast("OSRM no respondió. Uso ruta simple (aprox).", "warning");
-          const approx = nearestNeighborFixed(points);
-          drawRouteSimplePolyline(approx);
-
-          let dist = 0;
-          for (let i = 1; i < approx.length; i++) dist += getDistance(approx[i-1].lat, approx[i-1].lng, approx[i].lat, approx[i].lng);
-          showRouteInfoWithTotals(approx, dist, dist * 2);
-          return;
-        }
-
+        setLoading(true, "Calculando matriz de tiempos...", "OSRM Table");
+        let table = await osrmTableDriving(points);
         const durations = table.durations;
         if (!durations) throw new Error("OSRM no devolvió durations");
 
+        // indexes
         const startIdx = 0;
         const endIdx = points.length - 1;
         const waypointIdxs = [];
         for (let i = 1; i < points.length - 1; i++) waypointIdxs.push(i);
 
-        setLoading(true, "Optimizando orden (ruta óptima)...");
+        setLoading(true, "Optimizando orden...", "DP exacto (hasta 10 puntos)");
         const orderIdxs = solveOptimalPathFixedStartEnd(durations, startIdx, endIdx, waypointIdxs);
         const orderedPoints = orderIdxs.map(i => points[i]);
 
-        setLoading(true, "Trazando ruta por calles (OSRM)...");
-        const routeRes = await osrmRouteDriving(orderedPoints);
-        if (!routeRes.routes || !routeRes.routes.length) throw new Error("OSRM route vacío");
+        // update visitOrderIds to match optimized order of mids
+        const optimizedMid = orderedPoints.slice(1, -1);
+        visitOrderIds = optimizedMid
+          .map(p => addresses.find(a => a.address === p.address && a.lat === p.lat && a.lng === p.lng)?._id)
+          .filter(Boolean);
 
-        clearRouteLayersOnly();
+        setLoading(true, "Trazando ruta por calles (OSRM)...", "Orden optimizado");
+        const routeRes = await osrmRouteDriving(orderedPoints, true);
+        if (!routeRes.routes?.length) throw new Error("OSRM route vacío");
+        const route = routeRes.routes[0];
+        const geo = route.geometry;
+        lastRouteGeoCoords = geo.coordinates;
+        lastRouteSteps = extractSteps(routeRes);
+        navTotalDistance = route.distance;
 
-        const geo = routeRes.routes[0].geometry;
-        routeLayer = L.geoJSON(geo, { style: { color: "#6366f1", weight: 4, opacity: 0.9 } }).addTo(map);
+        drawRouteAndMarkers(orderedPoints, geo);
+        showRouteInfo(orderedPoints, route.distance / 1000, route.duration / 60);
 
-        routeNumberMarkers = orderedPoints.map((p, idx) => {
-          return L.marker([p.lat, p.lng], {
-            icon: L.divIcon({
-              className: "route-number-marker",
-              html: `<div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">${idx + 1}</div>`,
-              iconSize: [28, 28],
-              iconAnchor: [14, 14]
-            })
-          }).addTo(map);
+        document.getElementById("export-gpx-btn").disabled = false;
+        document.getElementById("export-kml-btn").disabled = false;
+
+        updateUI(); // para refrescar lista drag
+        setLoading(false);
+        showToast("Ruta optimizada ✅", "success");
+      } catch (e) {
+        setLoading(false);
+        showToast(e.message || "Error", "error");
+      }
+    }
+
+    // ========= Steps extraction + navigation =========
+    function extractSteps(routeRes) {
+      // OSRM route format: routes[0].legs[0].steps[]
+      try {
+        const steps = [];
+        const legs = routeRes.routes[0].legs || [];
+        legs.forEach((leg, legIdx) => {
+          (leg.steps || []).forEach((s) => {
+            steps.push({
+              name: s.name || "",
+              distance: s.distance || 0,
+              duration: s.duration || 0,
+              maneuver: s.maneuver || {},
+              mode: s.mode || "driving",
+              geometry: s.geometry || null
+            });
+          });
+          if (legIdx < legs.length - 1) {
+            // separador visual
+            steps.push({ separator: true });
+          }
         });
-
-        const bounds = orderedPoints.map(p => [p.lat, p.lng]);
-        map.fitBounds(bounds, { padding: [50, 50] });
-
-        const distKm = routeRes.routes[0].distance / 1000;
-        const durMin = routeRes.routes[0].duration / 60;
-        showRouteInfoWithTotals(orderedPoints, distKm, durMin);
-
-        setLoading(false);
-        showToast("Percorso óptimo calculado ✅", "success");
-      } catch (err) {
-        console.error(err);
-        setLoading(false);
-        showToast("Error calculando ruta", "error");
+        return steps.filter(Boolean);
+      } catch {
+        return [];
       }
     }
 
-    // ========= GOOGLE MAPS LINK =========
-    function buildGoogleMapsDirectionsUrl(points) {
-      if (!points || points.length < 2) return null;
+    function prettyStep(step) {
+      if (step.separator) return "—";
+      const t = step.maneuver?.type || "continue";
+      const mod = step.maneuver?.modifier ? ` (${step.maneuver.modifier})` : "";
+      const road = step.name ? ` → ${step.name}` : "";
+      return `${t}${mod}${road}`;
+    }
 
-      // Google Maps url: origin, destination, waypoints (hasta 23)
-      const origin = encodeURIComponent(points[0].address);
-      const destination = encodeURIComponent(points[points.length - 1].address);
-
-      const waypointsArr = points.slice(1, -1).map(p => p.address);
-      const waypoints = encodeURIComponent(waypointsArr.join(" | "));
-
-      // Nota: Google Maps a veces ignora waypoints si son coordenadas raras;
-      // usamos addresses (y “Mi ubicación” no sirve como string, entonces usamos lat,lng)
-      const originFixed = (points[0].address === "Mi ubicación") ? `${points[0].lat},${points[0].lng}` : points[0].address;
-      const destFixed = (points[points.length - 1].address === "Mi ubicación") ? `${points[points.length - 1].lat},${points[points.length - 1].lng}` : points[points.length - 1].address;
-
-      const originEnc = encodeURIComponent(originFixed);
-      const destEnc = encodeURIComponent(destFixed);
-
-      let url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=${originEnc}&destination=${destEnc}`;
-      if (waypointsArr.length > 0) {
-        // para waypoints, si alguno es Mi ubicación, convertimos a lat,lng
-        const wpsFixed = points.slice(1, -1).map(p => (p.address === "Mi ubicación") ? `${p.lat},${p.lng}` : p.address);
-        url += `&waypoints=${encodeURIComponent(wpsFixed.join("|"))}`;
+    function openNavPanel() {
+      if (!lastOrderedRoutePoints || !lastRouteSteps) {
+        showToast("Primero calculá una ruta", "warning");
+        return;
       }
-      return url;
+      document.getElementById("nav-panel").classList.remove("hidden");
+      renderNavSteps();
+      navStepIndex = 0;
+      navTraveledApprox = 0;
+      updateNavUI();
     }
 
-    // ========= UI RENDER =========
-    function updateUI() {
-      document.getElementById("app-title").textContent = config.appTitle;
-      document.getElementById("address-count").textContent = `${addresses.length} direccion${addresses.length !== 1 ? "es" : ""}`;
-      document.getElementById("selected-count").textContent = `${selectedIds.length}/${config.maxRoutePoints} seleccionados`;
-      document.getElementById("calc-route-btn").disabled = selectedIds.length < 1;
-
-      renderAddressList();
-      updateStartEndSelectors();
+    function renderNavSteps() {
+      const box = document.getElementById("nav-steps-inner");
+      const steps = lastRouteSteps || [];
+      box.innerHTML = steps.map((s, i) => {
+        if (s.separator) {
+          return `<div class="text-xs text-slate-500 py-1">— Nuevo tramo —</div>`;
+        }
+        const dist = Math.round((s.distance || 0));
+        const min = Math.max(1, Math.round((s.duration || 0) / 60));
+        const isActive = i === navStepIndex;
+        return `
+          <div class="p-2 rounded-lg ${isActive ? "bg-indigo-500/20 border border-indigo-500/30" : "bg-slate-900/30 border border-slate-700"}">
+            <div class="flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <div class="text-sm font-semibold truncate">${escapeHtml(prettyStep(s))}</div>
+                <div class="text-xs text-slate-400">${dist} m • ~${min} min</div>
+              </div>
+              <div class="text-xs text-slate-500 mono">#${i+1}</div>
+            </div>
+          </div>
+        `;
+      }).join("");
     }
 
+    function updateNavUI() {
+      const steps = lastRouteSteps || [];
+      // encontrar el próximo paso no-separator
+      let idx = navStepIndex;
+      while (idx < steps.length && steps[idx]?.separator) idx++;
+      const current = steps[idx] || null;
+
+      const nextEl = document.getElementById("nav-next");
+      const subEl = document.getElementById("nav-sub");
+
+      if (!current) {
+        nextEl.textContent = "Llegaste ✅";
+        subEl.textContent = "Fin de ruta";
+        document.getElementById("nav-progress").style.width = "100%";
+        return;
+      }
+
+      nextEl.textContent = prettyStep(current);
+      const dist = Math.round(current.distance || 0);
+      const min = Math.max(1, Math.round((current.duration || 0) / 60));
+      subEl.textContent = `${dist} m • ~${min} min`;
+
+      // progreso aproximado basado en distancia total
+      if (navTotalDistance > 0) {
+        const pct = Math.max(0, Math.min(100, (navTraveledApprox / navTotalDistance) * 100));
+        document.getElementById("nav-progress").style.width = `${pct}%`;
+      } else {
+        document.getElementById("nav-progress").style.width = "0%";
+      }
+
+      // refrescar steps list (highlight)
+      renderNavSteps();
+    }
+
+    function moveNavMarker(lat, lng) {
+      if (!navMarker) {
+        navMarker = L.marker([lat, lng], {
+          icon: L.divIcon({
+            className: "route-number-marker",
+            html: `<div style="background: #10b981; color: white; width: 30px; height: 30px; border-radius: 12px; display:flex; align-items:center; justify-content:center; font-weight:800; border:2px solid rgba(255,255,255,0.9); box-shadow:0 2px 12px rgba(0,0,0,0.35);">▶</div>`,
+            iconSize: [30, 30],
+            iconAnchor: [15, 15]
+          })
+        }).addTo(map);
+      } else {
+        navMarker.setLatLng([lat, lng]);
+      }
+    }
+
+    function stopNavigation() {
+      if (navWatchId !== null) {
+        navigator.geolocation.clearWatch(navWatchId);
+        navWatchId = null;
+      }
+      if (navSimTimer) {
+        clearInterval(navSimTimer);
+        navSimTimer = null;
+      }
+      if (navMarker) {
+        try { map.removeLayer(navMarker); } catch {}
+        navMarker = null;
+      }
+    }
+
+    function startNavigationGPS() {
+      if (!lastRouteGeoCoords || !lastRouteGeoCoords.length) {
+        showToast("No hay geometría de ruta", "warning");
+        return;
+      }
+      if (!navigator.geolocation) {
+        showToast("Tu navegador no soporta geolocalización", "error");
+        return;
+      }
+
+      stopNavigation();
+      openNavPanel();
+      showToast("Navegación GPS iniciada", "success");
+
+      navWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          moveNavMarker(lat, lng);
+          map.panTo([lat, lng], { animate: true });
+
+          // avance aproximado: buscar punto más cercano en la geometría
+          const idx = findNearestRouteIndex(lat, lng, lastRouteGeoCoords);
+          if (idx >= 0) {
+            navTraveledApprox = estimateTraveledDistanceMeters(idx, lastRouteGeoCoords);
+            // regla simple: avanzamos pasos cuando superamos su distancia acumulada aprox
+            advanceStepHeuristic();
+            updateNavUI();
+          }
+        },
+        () => showToast("No pude leer tu ubicación (permiso?)", "error"),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 1500 }
+      );
+    }
+
+    function startNavigationSim() {
+      if (!lastRouteGeoCoords || !lastRouteGeoCoords.length) {
+        showToast("No hay ruta para simular", "warning");
+        return;
+      }
+      stopNavigation();
+      openNavPanel();
+      showToast("Simulación iniciada", "success");
+
+      let i = 0;
+      navSimTimer = setInterval(() => {
+        i = Math.min(i + 2, lastRouteGeoCoords.length - 1); // velocidad
+        const [lng, lat] = lastRouteGeoCoords[i];
+        moveNavMarker(lat, lng);
+        map.panTo([lat, lng], { animate: true });
+
+        navTraveledApprox = estimateTraveledDistanceMeters(i, lastRouteGeoCoords);
+        advanceStepHeuristic();
+        updateNavUI();
+
+        if (i >= lastRouteGeoCoords.length - 1) {
+          clearInterval(navSimTimer);
+          navSimTimer = null;
+          updateNavUI();
+          showToast("Simulación finalizada ✅", "success");
+        }
+      }, 350);
+    }
+
+    function findNearestRouteIndex(lat, lng, coords) {
+      let best = -1;
+      let bestD = Infinity;
+      // muestreo (no hace falta recorrer todo para una beta)
+      const step = Math.max(1, Math.floor(coords.length / 400));
+      for (let i = 0; i < coords.length; i += step) {
+        const [clng, clat] = coords[i];
+        const d = getDistanceKm(lat, lng, clat, clng);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      return best;
+    }
+
+    function estimateTraveledDistanceMeters(idx, coords) {
+      // distancia acumulada hasta idx
+      let meters = 0;
+      const step = 1;
+      for (let i = 1; i <= idx; i += step) {
+        const [lng1, lat1] = coords[i-1];
+        const [lng2, lat2] = coords[i];
+        meters += kmToMeters(getDistanceKm(lat1, lng1, lat2, lng2));
+      }
+      return meters;
+    }
+
+    function advanceStepHeuristic() {
+      // Avanza step si la distancia restante de ese step se “consumió” aprox.
+      // En beta: usamos una heurística basada en distancia de steps acumulada.
+      const steps = lastRouteSteps || [];
+      let cum = 0;
+      for (let i = 0; i < steps.length; i++) {
+        if (steps[i]?.separator) continue;
+        cum += (steps[i].distance || 0);
+        if (navTraveledApprox < cum) {
+          navStepIndex = i;
+          return;
+        }
+      }
+      navStepIndex = steps.length;
+    }
+
+    // ========= Export GPX / KML =========
+    function downloadFile(filename, content, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportGPX() {
+      if (!lastRouteGeoCoords || !lastRouteGeoCoords.length) return;
+      const now = new Date().toISOString();
+
+      const trkpts = lastRouteGeoCoords.map(([lng, lat]) =>
+        `<trkpt lat="${lat}" lon="${lng}"></trkpt>`
+      ).join("");
+
+      const gpx =
+`<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="RoutePlannerBeta" xmlns="http://www.topografix.com/GPX/1/1">
+  <metadata><time>${now}</time></metadata>
+  <trk>
+    <name>Ruta</name>
+    <trkseg>
+      ${trkpts}
+    </trkseg>
+  </trk>
+</gpx>`;
+      downloadFile("ruta.gpx", gpx, "application/gpx+xml");
+      showToast("GPX descargado ✅", "success");
+    }
+
+    function exportKML() {
+      if (!lastRouteGeoCoords || !lastRouteGeoCoords.length) return;
+      const coordsStr = lastRouteGeoCoords.map(([lng, lat]) => `${lng},${lat},0`).join(" ");
+
+      const kml =
+`<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Ruta</name>
+    <Placemark>
+      <name>Ruta</name>
+      <Style>
+        <LineStyle>
+          <color>ff7f3cff</color>
+          <width>4</width>
+        </LineStyle>
+      </Style>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>${coordsStr}</coordinates>
+      </LineString>
+    </Placemark>
+  </Document>
+</kml>`;
+      downloadFile("ruta.kml", kml, "application/vnd.google-earth.kml+xml");
+      showToast("KML descargado ✅", "success");
+    }
+
+    // ========= Address list render =========
     function renderAddressList() {
       const container = document.getElementById("address-list");
       const filtered = getFilteredAddresses();
 
-      if (filtered.length === 0) {
+      if (!filtered.length) {
         container.innerHTML = `
           <div class="text-center py-8 text-slate-500">
-            <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-            </svg>
-            <p>${addresses.length === 0 ? "No hay direcciones cargadas" : "No hay resultados con los filtros actuales"}</p>
-            <p class="text-xs mt-1">${addresses.length === 0 ? "Agrega tu primera dirección arriba" : "Intenta cambiar los filtros"}</p>
+            <p>${addresses.length ? "No hay resultados con los filtros actuales" : "No hay direcciones cargadas"}</p>
           </div>
         `;
         return;
@@ -987,31 +1343,21 @@
 
       container.innerHTML = filtered.map(addr => {
         const isSelected = selectedIds.includes(addr.id);
-        const orderNum = selectedIds.indexOf(addr.id) + 1;
+        const orderNum = visitOrderIds.indexOf(addr.id) + 1;
 
         return `
-          <div class="address-card bg-slate-700/50 rounded-xl p-3 cursor-pointer transition-all border-2 ${isSelected ? "border-indigo-500" : "border-transparent"}"
+          <div class="address-card bg-slate-700/40 rounded-xl p-3 cursor-pointer transition-all border-2 ${isSelected ? "border-indigo-500" : "border-transparent"}"
                data-id="${escapeAttr(addr.id)}">
             <div class="flex items-start gap-3">
               <div class="w-8 h-8 rounded-lg ${isSelected ? "bg-indigo-500" : "bg-slate-600"} flex items-center justify-center flex-shrink-0">
-                ${isSelected ? `<span class="font-bold text-sm">${orderNum}</span>` : `
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                  </svg>`
-                }
+                ${isSelected ? `<span class="font-bold text-sm">${orderNum || ""}</span>` : "📍"}
               </div>
-
               <div class="flex-1 min-w-0">
                 <p class="font-medium text-sm truncate">${escapeHtml(addr.address)}</p>
                 <p class="text-xs text-slate-400 mt-1">${escapeHtml(addr.zone || "Sin zona")} • ${escapeHtml(addr.postal_code || "Sin CP")}</p>
               </div>
-
-              <button class="delete-btn p-1.5 rounded-lg hover:bg-slate-600 transition-all opacity-60 hover:opacity-100" data-del="${escapeAttr(addr.id)}">
-                <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                </svg>
+              <button class="delete-btn p-1.5 rounded-lg hover:bg-slate-600 transition-all opacity-70 hover:opacity-100" data-del="${escapeAttr(addr.id)}" title="Eliminar">
+                🗑️
               </button>
             </div>
           </div>
@@ -1029,13 +1375,79 @@
       container.querySelectorAll(".delete-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
-          const id = btn.getAttribute("data-del");
-          showDeleteModal(id);
+          showDeleteModal(btn.getAttribute("data-del"));
         });
       });
     }
 
-    // ========= DELETE MODAL =========
+    // ========= Route order render (DND) =========
+    function renderRouteOrder() {
+      const box = document.getElementById("route-order");
+      syncVisitOrderWithSelected();
+
+      if (!visitOrderIds.length) {
+        box.innerHTML = `<p class="text-xs text-slate-500">Seleccioná direcciones para armar el orden acá.</p>`;
+        return;
+      }
+
+      const items = visitOrderIds.map((id, idx) => {
+        const a = addresses.find(x => x.id === id);
+        if (!a) return "";
+        return `
+          <div class="bg-slate-900/30 border border-slate-700 rounded-xl p-2 flex items-center gap-2"
+               draggable="true" data-dnd="${escapeAttr(id)}">
+            <div class="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-300 flex items-center justify-center font-bold text-xs">${idx+1}</div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm truncate">${escapeHtml(a.address)}</div>
+              <div class="text-xs text-slate-400 truncate">${escapeHtml(a.zone || "—")} • ${escapeHtml(a.postal_code || "—")}</div>
+            </div>
+            <div class="text-slate-400 cursor-grab select-none" title="Arrastrar">⠿</div>
+          </div>
+        `;
+      }).join("");
+
+      box.innerHTML = items;
+
+      // DND handlers
+      let draggingId = null;
+
+      box.querySelectorAll("[data-dnd]").forEach(el => {
+        el.addEventListener("dragstart", () => {
+          draggingId = el.getAttribute("data-dnd");
+          el.classList.add("dragging");
+        });
+        el.addEventListener("dragend", () => {
+          draggingId = null;
+          el.classList.remove("dragging");
+          box.querySelectorAll("[data-dnd]").forEach(x => x.classList.remove("drop-hint"));
+        });
+
+        el.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          el.classList.add("drop-hint");
+        });
+        el.addEventListener("dragleave", () => el.classList.remove("drop-hint"));
+
+        el.addEventListener("drop", (e) => {
+          e.preventDefault();
+          el.classList.remove("drop-hint");
+          const targetId = el.getAttribute("data-dnd");
+          if (!draggingId || draggingId === targetId) return;
+
+          const from = visitOrderIds.indexOf(draggingId);
+          const to = visitOrderIds.indexOf(targetId);
+          if (from < 0 || to < 0) return;
+
+          const [moved] = visitOrderIds.splice(from, 1);
+          visitOrderIds.splice(to, 0, moved);
+
+          renderRouteOrder();
+          updateUI();
+        });
+      });
+    }
+
+    // ========= Delete modal =========
     function showDeleteModal(id) {
       deleteTargetId = id;
       const addr = addresses.find(a => a.id === id);
@@ -1052,6 +1464,7 @@
 
       addresses = addresses.filter(a => a.id !== id);
       selectedIds = selectedIds.filter(x => x !== id);
+      visitOrderIds = visitOrderIds.filter(x => x !== id);
 
       const startSel = document.getElementById("start-select");
       const endSel = document.getElementById("end-select");
@@ -1059,20 +1472,19 @@
       if (endSel.value === id) endSel.value = "";
 
       hideDeleteModal();
-      showToast("Dirección eliminada", "success");
-
       saveState();
       updateFilters();
       updateUI();
       updateMarkers();
+      showToast("Dirección eliminada ✅", "success");
     }
 
-    // ========= ADD ADDRESS =========
+    // ========= Add Address (with autocomplete chosen) =========
     async function handleFormSubmit(e) {
       e.preventDefault();
 
       if (addresses.length >= config.maxAddresses) {
-        showToast(`Límite de ${config.maxAddresses} direcciones alcanzado`, "warning");
+        showToast(`Límite ${config.maxAddresses} alcanzado`, "warning");
         return;
       }
 
@@ -1081,43 +1493,43 @@
       const postalInput = document.getElementById("postal-input");
 
       const address = addressInput.value.trim();
-      if (!address) { showToast("Ingresa una dirección", "warning"); return; }
+      if (!address) { showToast("Ingresá una dirección", "warning"); return; }
 
-      setLoading(true, "Geocodificando dirección...");
-      try {
-        const coords = await geocodeAddress(normalizeAddressForGeocode(address));
-        if (!coords) { showToast("No se pudo geocodificar la dirección", "error"); setLoading(false); return; }
+      setLoading(true, "Geocodificando...", address);
 
-        const id = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString() + Math.random().toString(16).slice(2)));
-        addresses.push({
-          id,
-          address,
-          zone: zoneInput.value.trim() || "",
-          postal_code: postalInput.value.trim() || "",
-          lat: coords.lat,
-          lng: coords.lng,
-          created_at: new Date().toISOString()
-        });
-
-        addressInput.value = "";
-        zoneInput.value = "";
-        postalInput.value = "";
-
-        showToast("Dirección agregada correctamente", "success");
-
-        saveState();
-        updateFilters();
-        updateUI();
-        updateMarkers();
-      } catch (err) {
-        console.error(err);
-        showToast("Error al procesar la dirección", "error");
-      } finally {
+      const coords = await geocodeAddress(normalizeAddressForGeocode(address));
+      if (!coords) {
         setLoading(false);
+        showToast("No pude geocodificar esa dirección", "error");
+        return;
       }
+
+      const id = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString() + Math.random().toString(16).slice(2)));
+      addresses.push({
+        id,
+        address,
+        zone: zoneInput.value.trim() || "",
+        postal_code: postalInput.value.trim() || "",
+        lat: coords.lat,
+        lng: coords.lng,
+        created_at: new Date().toISOString()
+      });
+
+      addressInput.value = "";
+      zoneInput.value = "";
+      postalInput.value = "";
+      hideSuggestions("address");
+
+      saveState();
+      updateFilters();
+      updateUI();
+      updateMarkers();
+
+      setLoading(false);
+      showToast("Dirección agregada ✅", "success");
     }
 
-    // ========= IMPORT =========
+    // ========= Import =========
     function setupImportHandlers() {
       const toggleBtn = document.getElementById("toggle-import-form");
       const importSection = document.getElementById("import-form-section");
@@ -1138,12 +1550,6 @@
 
       ["dragenter", "dragover", "dragleave", "drop"].forEach(name => {
         dropZone.addEventListener(name, (e) => { e.preventDefault(); e.stopPropagation(); });
-      });
-      ["dragenter", "dragover"].forEach(name => {
-        dropZone.addEventListener(name, () => dropZone.classList.add("border-indigo-500", "bg-indigo-500/5"));
-      });
-      ["dragleave", "drop"].forEach(name => {
-        dropZone.addEventListener(name, () => dropZone.classList.remove("border-indigo-500", "bg-indigo-500/5"));
       });
 
       dropZone.addEventListener("drop", (e) => {
@@ -1175,16 +1581,16 @@
           const name = file.name.toLowerCase();
           if (name.endsWith(".csv")) data = parseCSV(e.target.result);
           else if (name.endsWith(".xlsx") || name.endsWith(".xls")) data = parseXLSX(e.target.result);
-          else { showToast("Formato de archivo no soportado", "error"); return; }
+          else { showToast("Formato no soportado", "error"); return; }
 
-          if (!data || data.length === 0) { showToast("No se encontraron datos en el archivo", "error"); return; }
+          if (!data || !data.length) { showToast("No hay datos", "error"); return; }
 
           importedData = data;
           populateColumnSelectors(data);
           document.getElementById("file-preview").classList.remove("hidden");
         } catch (err) {
           console.error(err);
-          showToast("Error al procesar el archivo", "error");
+          showToast("Error leyendo archivo", "error");
         }
       };
 
@@ -1218,16 +1624,14 @@
     }
 
     function populateColumnSelectors(data) {
-      if (!data.length) return;
-      const headers = Object.keys(data[0]);
-
+      const headers = Object.keys(data[0] || {});
       const addressSel = document.getElementById("address-column");
       const zoneSel = document.getElementById("zone-column");
       const postalSel = document.getElementById("postal-column");
 
-      addressSel.innerHTML = `<option value="">Selecciona columna de Dirección</option>`;
-      zoneSel.innerHTML = `<option value="">Selecciona columna de Zona (opcional)</option>`;
-      postalSel.innerHTML = `<option value="">Selecciona columna de Código Postal (opcional)</option>`;
+      addressSel.innerHTML = `<option value="">Columna Dirección</option>`;
+      zoneSel.innerHTML = `<option value="">Columna Zona (opcional)</option>`;
+      postalSel.innerHTML = `<option value="">Columna CP (opcional)</option>`;
 
       headers.forEach(h => {
         addressSel.appendChild(new Option(h, h));
@@ -1242,34 +1646,30 @@
     }
 
     async function processImport() {
-      if (!importedData || !importedData.length) { showToast("No hay datos para importar", "warning"); return; }
+      if (!importedData || !importedData.length) { showToast("No hay datos", "warning"); return; }
 
       const addressCol = document.getElementById("address-column").value;
       const zoneCol = document.getElementById("zone-column").value;
       const postalCol = document.getElementById("postal-column").value;
 
-      if (!addressCol) { showToast("Selecciona una columna de Dirección", "warning"); return; }
+      if (!addressCol) { showToast("Elegí columna Dirección", "warning"); return; }
+
       if (addresses.length + importedData.length > config.maxAddresses) {
-        showToast(`Solo puedes agregar ${config.maxAddresses - addresses.length} más direcciones`, "warning");
+        showToast(`Solo podés agregar ${config.maxAddresses - addresses.length} más`, "warning");
         return;
       }
 
       const importBtn = document.getElementById("import-btn");
-      const original = importBtn.textContent;
       importBtn.disabled = true;
-      importBtn.textContent = "Importando...";
 
-      let success = 0;
-      let errors = 0;
-
-      setLoading(true, `Importando 0/${importedData.length}...`);
+      let success = 0, errors = 0;
 
       for (let i = 0; i < importedData.length; i++) {
-        setLoading(true, `Importando ${i + 1}/${importedData.length}...`);
-
         const row = importedData[i];
-        let addr = (row[addressCol] ?? "").toString().trim();
+        const addr = (row[addressCol] ?? "").toString().trim();
         if (!addr) continue;
+
+        setLoading(true, `Importando ${i+1}/${importedData.length}`, addr);
 
         try {
           const coords = await geocodeAddress(normalizeAddressForGeocode(addr));
@@ -1287,20 +1687,15 @@
           });
 
           success++;
-        } catch (err) {
-          console.error("Import error:", err);
+        } catch {
           errors++;
         }
 
         await sleep(config.importGeocodeDelayMs);
       }
 
-      setLoading(false);
       importBtn.disabled = false;
-      importBtn.textContent = original;
-
-      if (success > 0) showToast(`✓ ${success} importadas${errors ? ` (${errors} errores)` : ""}`, "success");
-      else showToast("No se pudieron importar direcciones", "error");
+      setLoading(false);
 
       document.getElementById("import-form-section").classList.add("hidden");
       document.getElementById("file-input").value = "";
@@ -1311,9 +1706,11 @@
       updateFilters();
       updateUI();
       updateMarkers();
+
+      showToast(`Import: ${success} ok${errors ? ` • ${errors} errores` : ""}`, success ? "success" : "error");
     }
 
-    // ========= BACKUP =========
+    // ========= Backup / Restore =========
     function downloadBackupJson() {
       const payload = {
         exported_at: new Date().toISOString(),
@@ -1328,50 +1725,145 @@
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      showToast("Backup descargado", "success");
+      showToast("Backup descargado ✅", "success");
     }
 
-    // ========= CLEAR ALL =========
+    function restoreBackupFromFile(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          const list = parsed?.addresses;
+          if (!Array.isArray(list)) throw new Error("Formato inválido");
+          addresses = list;
+          selectedIds = [];
+          visitOrderIds = [];
+          clearRouteLayersOnly();
+          saveState();
+          updateFilters();
+          updateUI();
+          updateMarkers();
+          showToast("Backup restaurado ✅", "success");
+        } catch (e) {
+          showToast("No pude restaurar ese JSON", "error");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // ========= Clear all =========
     function clearAll() {
-      if (!confirm("¿Seguro que querés borrar todas las direcciones guardadas en este navegador?")) return;
+      if (!confirm("¿Borrar todas las direcciones guardadas en este navegador?")) return;
       addresses = [];
       selectedIds = [];
+      visitOrderIds = [];
       clearRouteLayersOnly();
-
       localStorage.removeItem(config.storageKey);
-      // no borramos geocode cache por defecto (mejora performance), si querés lo borramos también
-      // localStorage.removeItem(config.geocodeCacheKey);
-
       updateFilters();
       updateUI();
       updateMarkers();
       showToast("Todo limpio ✅", "success");
     }
 
-    // ========= SECURITY (escape) =========
-    function escapeHtml(str) {
-      return String(str)
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
+    // ========= Autocomplete wiring =========
+    function debounce(fn, delay) {
+      let t = null;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), delay);
+      };
     }
-    function escapeAttr(str) { return escapeHtml(str).replaceAll("`", "&#096;"); }
 
-    // ========= INIT =========
+    function hideSuggestions(kind) {
+      const el = kind === "address" ? document.getElementById("address-suggestions")
+               : kind === "start" ? document.getElementById("start-suggestions")
+               : document.getElementById("end-suggestions");
+      el.classList.add("hidden");
+      el.innerHTML = "";
+    }
+
+    function showSuggestions(kind, items, inputEl) {
+      const el = kind === "address" ? document.getElementById("address-suggestions")
+               : kind === "start" ? document.getElementById("start-suggestions")
+               : document.getElementById("end-suggestions");
+
+      if (!items.length) { hideSuggestions(kind); return; }
+
+      el.innerHTML = items.map((it) => `
+        <button type="button" class="text-slate-200">
+          <div class="text-sm">${escapeHtml(it.label)}</div>
+          <div class="text-xs text-slate-400 mono">${it.lat.toFixed(5)}, ${it.lng.toFixed(5)}</div>
+        </button>
+      `).join("");
+
+      [...el.querySelectorAll("button")].forEach((btn, idx) => {
+        btn.addEventListener("click", () => {
+          inputEl.value = items[idx].label;
+          hideSuggestions(kind);
+        });
+      });
+
+      el.classList.remove("hidden");
+    }
+
+    const handleAutocompleteAddress = debounce(async () => {
+      const input = document.getElementById("address-input");
+      const q = input.value.trim();
+      if (q.length < 3) return hideSuggestions("address");
+
+      const items = await searchAutocomplete(normalizeAddressForGeocode(q));
+      showSuggestions("address", items, input);
+    }, config.autocompleteDelayMs);
+
+    const handleAutocompleteStart = debounce(async () => {
+      const input = document.getElementById("start-new");
+      const q = input.value.trim();
+      if (q.length < 3) return hideSuggestions("start");
+      const items = await searchAutocomplete(normalizeAddressForGeocode(q));
+      showSuggestions("start", items, input);
+    }, config.autocompleteDelayMs);
+
+    const handleAutocompleteEnd = debounce(async () => {
+      const input = document.getElementById("end-new");
+      const q = input.value.trim();
+      if (q.length < 3) return hideSuggestions("end");
+      const items = await searchAutocomplete(normalizeAddressForGeocode(q));
+      showSuggestions("end", items, input);
+    }, config.autocompleteDelayMs);
+
+    // ========= UI update =========
+    function updateUI() {
+      document.getElementById("address-count").textContent = `${addresses.length} direccion${addresses.length !== 1 ? "es" : ""}`;
+      document.getElementById("selected-count").textContent = `${selectedIds.length}/${config.maxRoutePoints}`;
+
+      updateStartEndSelectors();
+      renderAddressList();
+      renderRouteOrder();
+    }
+
+    // ========= Init =========
     function init() {
       loadGeocodeCache();
       loadState();
 
       initMap();
-
       updateFilters();
       updateUI();
       updateMarkers();
 
-      // Form
+      // Form + autocomplete
       document.getElementById("address-form").addEventListener("submit", handleFormSubmit);
+      document.getElementById("address-input").addEventListener("input", handleAutocompleteAddress);
+      document.getElementById("address-input").addEventListener("blur", () => setTimeout(() => hideSuggestions("address"), 180));
+
+      // Start/End
+      document.getElementById("start-select").addEventListener("change", updateStartEndSelectors);
+      document.getElementById("end-select").addEventListener("change", updateStartEndSelectors);
+
+      document.getElementById("start-new").addEventListener("input", handleAutocompleteStart);
+      document.getElementById("start-new").addEventListener("blur", () => setTimeout(() => hideSuggestions("start"), 180));
+      document.getElementById("end-new").addEventListener("input", handleAutocompleteEnd);
+      document.getElementById("end-new").addEventListener("blur", () => setTimeout(() => hideSuggestions("end"), 180));
 
       // Filters
       document.getElementById("zone-filter").addEventListener("change", () => { updateUI(); updateMarkers(); });
@@ -1388,44 +1880,61 @@
         updateUI(); updateMarkers();
       });
 
-      // Route
-      document.getElementById("calc-route-btn").addEventListener("click", calculateRoute);
-      document.getElementById("clear-route-btn").addEventListener("click", clearRoute);
+      // Import
+      setupImportHandlers();
 
-      // Start/End selects
-      document.getElementById("start-select").addEventListener("change", updateStartEndSelectors);
-      document.getElementById("end-select").addEventListener("change", updateStartEndSelectors);
+      // Route buttons
+      document.getElementById("calc-route-btn").addEventListener("click", calculateWithUserOrder);
+      document.getElementById("optimize-route-btn").addEventListener("click", optimizeRoute);
+      document.getElementById("clear-route-btn").addEventListener("click", clearRouteAll);
 
-      // Google Maps button
+      // Export
+      document.getElementById("export-gpx-btn").addEventListener("click", exportGPX);
+      document.getElementById("export-kml-btn").addEventListener("click", exportKML);
+
+      // Google Maps
       document.getElementById("open-gmaps-btn").addEventListener("click", () => {
         const url = buildGoogleMapsDirectionsUrl(lastOrderedRoutePoints);
-        if (!url) { showToast("Primero calculá una ruta", "warning"); return; }
+        if (!url) return showToast("Primero calculá una ruta", "warning");
         window.open(url, "_blank", "noopener,noreferrer");
+      });
+
+      // Navigation panel
+      document.getElementById("nav-start-btn").addEventListener("click", startNavigationGPS);
+      document.getElementById("nav-sim-btn").addEventListener("click", startNavigationSim);
+      document.getElementById("nav-stop-btn").addEventListener("click", () => {
+        stopNavigation();
+        showToast("Navegación detenida", "info");
+      });
+      document.getElementById("nav-toggle-steps").addEventListener("click", () => {
+        document.getElementById("nav-steps").classList.toggle("hidden");
       });
 
       // Delete modal
       document.getElementById("cancel-delete").addEventListener("click", hideDeleteModal);
       document.getElementById("confirm-delete").addEventListener("click", deleteAddress);
 
-      // Import
-      setupImportHandlers();
-
-      // Backup
+      // Backup / clear / restore
       document.getElementById("backup-btn").addEventListener("click", downloadBackupJson);
-
-      // Clear all
       document.getElementById("clear-all-btn").addEventListener("click", clearAll);
+      document.getElementById("restore-input").addEventListener("change", (e) => {
+        const f = e.target.files?.[0];
+        if (f) restoreBackupFromFile(f);
+        e.target.value = "";
+      });
 
-      // Mobile sidebar toggle
+      // Sidebar mobile
       document.getElementById("toggle-panel").addEventListener("click", () => {
         document.getElementById("sidebar").classList.toggle("-translate-x-full");
       });
-
       document.getElementById("map").addEventListener("click", () => {
         if (window.innerWidth < 1024) document.getElementById("sidebar").classList.add("-translate-x-full");
       });
 
-      showToast("Beta lista: persistencia + cache + mi ubicación + Google Maps ✅", "success");
+      // Dropzone
+      document.getElementById("drop-zone").addEventListener("click", () => document.getElementById("file-input").click());
+
+      showToast("Beta final: autocomplete + drag + export + navegación ✅", "success");
     }
 
     init();
