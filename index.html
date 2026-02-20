@@ -212,7 +212,7 @@
           </div>
         </div>
 
-        <!-- Route Planner -->
+        <!-- Route Planner (START/END + OPTIMAL) -->
         <div class="p-4 border-b border-slate-700 flex-shrink-0">
           <div class="flex items-center justify-between mb-3">
             <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Planificar Ruta</h2>
@@ -220,16 +220,36 @@
               0/10 seleccionados
             </span>
           </div>
-          <p class="text-xs text-slate-500 mb-3">Haz clic en las direcciones para seleccionar hasta 10 puntos</p>
+
+          <p class="text-xs text-slate-500 mb-3">Seleccioná hasta 10 puntos y elegí un inicio y un fin.</p>
+
+          <div class="space-y-2 mb-3">
+            <label class="text-xs text-slate-400">Punto de partida</label>
+            <select id="start-select" class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm">
+              <option value="">Seleccionar...</option>
+              <option value="__NEW__">Nueva dirección...</option>
+            </select>
+            <input id="start-new" type="text"
+              class="hidden w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm"
+              placeholder="Escribí punto de partida (ej: Via Rizzoli 1, Bologna)" />
+          </div>
+
+          <div class="space-y-2 mb-3">
+            <label class="text-xs text-slate-400">Punto de finalización</label>
+            <select id="end-select" class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm">
+              <option value="">Seleccionar...</option>
+              <option value="__NEW__">Nueva dirección...</option>
+            </select>
+            <input id="end-new" type="text"
+              class="hidden w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm"
+              placeholder="Escribí punto de finalización" />
+          </div>
+
           <div class="flex gap-2">
             <button id="calc-route-btn"
               class="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled>
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-              </svg>
-              Calcular Ruta
+              Calcular Ruta Óptima
             </button>
             <button id="clear-route-btn" class="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-all">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -238,6 +258,10 @@
               </svg>
             </button>
           </div>
+
+          <p class="text-[11px] text-slate-500 mt-2">
+            Ruta óptima con tiempos reales (OSRM/OpenStreetMap). Si OSRM falla, vuelve a modo simple.
+          </p>
         </div>
 
         <!-- Address List -->
@@ -270,7 +294,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
             </svg>
-            Ruta Optimizada
+            Ruta
           </h3>
           <div id="route-details" class="text-sm text-slate-300 space-y-1"></div>
         </div>
@@ -313,10 +337,8 @@
       appTitle: "Planificador de Rutas",
       maxAddresses: 999,
       maxRoutePoints: 10,
-      // Nominatim: subí este delay si te rate-limitea (ms por dirección en import)
-      importGeocodeDelayMs: 900,
-      // Centro por defecto (Bologna)
-      defaultCenter: [44.4949, 11.3426],
+      importGeocodeDelayMs: 900, // Nominatim delay en import masivo
+      defaultCenter: [44.4949, 11.3426], // Bologna
       defaultZoom: 13
     };
 
@@ -326,13 +348,13 @@
     let markers = {};
     let map = null;
 
-    let routeLayer = null;
+    let routeLayer = null;        // puede ser L.Polyline o L.GeoJSON
     let routeNumberMarkers = [];
     let deleteTargetId = null;
     let importedData = null;
 
-    // OPTIONAL: activar persistencia luego (localStorage)
-    // const PERSIST = false;
+    let startPoint = null; // { lat, lng, address }
+    let endPoint = null;   // { lat, lng, address }
 
     // ========= UTILS =========
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -384,7 +406,6 @@
     }
 
     function normalizeAddressForGeocode(addr) {
-      // agregá Bologna por defecto si el usuario activó el checkbox y no lo incluyó
       const shouldAppend = document.getElementById("append-bologna")?.checked;
       if (!shouldAppend) return addr;
       const low = addr.toLowerCase();
@@ -408,20 +429,12 @@
     }
 
     async function geocodeAddress(address) {
-      // Nominatim: poné un user-agent via "Referer" (browser lo hace).
-      // Importante: en caso de bloqueo, subir delay en import.
       const q = encodeURIComponent(address);
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=1`;
-      const res = await fetch(url, {
-        headers: {
-          "Accept": "application/json"
-        }
-      });
+      const res = await fetch(url, { headers: { "Accept": "application/json" } });
       if (!res.ok) return null;
       const data = await res.json();
-      if (data && data.length > 0) {
-        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-      }
+      if (data && data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
       return null;
     }
 
@@ -446,7 +459,6 @@
     }
 
     function updateMarkers() {
-      // clear old
       Object.values(markers).forEach(m => map.removeLayer(m));
       markers = {};
 
@@ -458,7 +470,6 @@
         }
       });
 
-      // fit bounds
       const bounds = filtered.filter(a => a.lat && a.lng).map(a => [a.lat, a.lng]);
       if (bounds.length > 0) map.fitBounds(bounds, { padding: [50, 50] });
     }
@@ -470,7 +481,6 @@
       const distanceFilter = parseInt(document.getElementById("distance-filter").value, 10);
 
       let filtered = [...addresses];
-
       if (zoneFilter) filtered = filtered.filter(a => a.zone === zoneFilter);
       if (postalFilter) filtered = filtered.filter(a => a.postal_code === postalFilter);
 
@@ -501,13 +511,40 @@
         postals.map(p => `<option value="${escapeAttr(p)}" ${p === currentPostal ? "selected" : ""}>${escapeHtml(p)}</option>`).join("");
     }
 
-    // ========= SELECTION & ROUTE =========
+    // ========= START/END SELECTORS =========
+    function updateStartEndSelectors() {
+      const startSel = document.getElementById("start-select");
+      const endSel = document.getElementById("end-select");
+      if (!startSel || !endSel) return;
+
+      const prevStart = startSel.value;
+      const prevEnd = endSel.value;
+
+      startSel.innerHTML = `<option value="">Seleccionar...</option><option value="__NEW__">Nueva dirección...</option>`;
+      endSel.innerHTML = `<option value="">Seleccionar...</option><option value="__NEW__">Nueva dirección...</option>`;
+
+      addresses.forEach(a => {
+        startSel.appendChild(new Option(a.address, a.id));
+        endSel.appendChild(new Option(a.address, a.id));
+      });
+
+      if ([...startSel.options].some(o => o.value === prevStart)) startSel.value = prevStart;
+      if ([...endSel.options].some(o => o.value === prevEnd)) endSel.value = prevEnd;
+
+      document.getElementById("start-new").classList.toggle("hidden", startSel.value !== "__NEW__");
+      document.getElementById("end-new").classList.toggle("hidden", endSel.value !== "__NEW__");
+
+      // Botón: se habilita si hay al menos 1 seleccionado; validación completa al calcular
+      document.getElementById("calc-route-btn").disabled = selectedIds.length < 1;
+    }
+
+    // ========= SELECTION =========
     function toggleAddressSelection(id) {
       const i = selectedIds.indexOf(id);
       if (i > -1) selectedIds.splice(i, 1);
       else {
         if (selectedIds.length >= config.maxRoutePoints) {
-          showToast(`Máximo ${config.maxRoutePoints} direcciones para la ruta`, "warning");
+          showToast(`Máximo ${config.maxRoutePoints} direcciones para el percorso`, "warning");
           return;
         }
         selectedIds.push(id);
@@ -516,95 +553,7 @@
       updateMarkers();
     }
 
-    function calculateRoute() {
-      if (selectedIds.length < 2) {
-        showToast("Selecciona al menos 2 direcciones", "warning");
-        return;
-      }
-
-      const selectedPoints = selectedIds
-        .map(id => addresses.find(a => a.id === id))
-        .filter(Boolean)
-        .filter(a => a.lat && a.lng);
-
-      if (selectedPoints.length < 2) {
-        showToast("Las direcciones seleccionadas no tienen coordenadas válidas", "error");
-        return;
-      }
-
-      // Nearest neighbor
-      const optimized = [];
-      const remaining = [...selectedPoints];
-      let current = remaining.shift();
-      optimized.push(current);
-
-      while (remaining.length) {
-        let nearestIndex = 0;
-        let nearestDistance = Infinity;
-        remaining.forEach((p, idx) => {
-          const d = getDistance(current.lat, current.lng, p.lat, p.lng);
-          if (d < nearestDistance) { nearestDistance = d; nearestIndex = idx; }
-        });
-        current = remaining.splice(nearestIndex, 1)[0];
-        optimized.push(current);
-      }
-
-      drawRoute(optimized);
-      showRouteInfo(optimized);
-    }
-
-    function drawRoute(route) {
-      clearRouteLayersOnly();
-
-      const latlngs = route.map(p => [p.lat, p.lng]);
-      routeLayer = L.polyline(latlngs, {
-        color: "#6366f1",
-        weight: 4,
-        opacity: 0.85,
-        dashArray: "10, 10",
-        lineCap: "round"
-      }).addTo(map);
-
-      // numbered markers
-      routeNumberMarkers = route.map((p, idx) => {
-        const m = L.marker([p.lat, p.lng], {
-          icon: L.divIcon({
-            className: "route-number-marker",
-            html: `<div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">${idx + 1}</div>`,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14]
-          })
-        }).addTo(map);
-        return m;
-      });
-
-      map.fitBounds(latlngs, { padding: [50, 50] });
-    }
-
-    function showRouteInfo(route) {
-      const panel = document.getElementById("route-info");
-      const details = document.getElementById("route-details");
-
-      let total = 0;
-      let html = `<ol class="list-decimal list-inside space-y-1">`;
-
-      route.forEach((p, idx) => {
-        if (idx > 0) total += getDistance(route[idx-1].lat, route[idx-1].lng, p.lat, p.lng);
-        html += `<li class="truncate">${escapeHtml(p.address)}</li>`;
-      });
-
-      html += `</ol>`;
-      html += `
-        <div class="mt-3 pt-3 border-t border-slate-600">
-          <p class="font-semibold text-emerald-400">Distancia total: ${total.toFixed(2)} km</p>
-          <p class="text-xs text-slate-400 mt-1">Tiempo estimado (aprox): ~${Math.round(total * 2)} min</p>
-        </div>
-      `;
-
-      details.innerHTML = html;
-      panel.classList.remove("hidden");
-    }
-
+    // ========= ROUTE LAYERS =========
     function clearRouteLayersOnly() {
       if (routeLayer) {
         map.removeLayer(routeLayer);
@@ -622,14 +571,303 @@
       updateMarkers();
     }
 
+    // ========= OSRM + OPTIMAL =========
+    function toLonLat(points) { return points.map(p => `${p.lng},${p.lat}`).join(";"); }
+
+    async function osrmTableDriving(points) {
+      const coords = toLonLat(points);
+      const url = `https://router.project-osrm.org/table/v1/driving/${coords}?annotations=duration,distance`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("OSRM table failed");
+      return await res.json();
+    }
+
+    async function osrmRouteDriving(orderedPoints) {
+      const coords = toLonLat(orderedPoints);
+      const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=false`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("OSRM route failed");
+      return await res.json();
+    }
+
+    function solveOptimalPathFixedStartEnd(matrix, startIdx, endIdx, waypointIdxs) {
+      const n = waypointIdxs.length;
+      if (n === 0) return [startIdx, endIdx];
+
+      const DP = Array.from({ length: 1 << n }, () => Array(n).fill(Infinity));
+      const parent = Array.from({ length: 1 << n }, () => Array(n).fill(-1));
+
+      for (let i = 0; i < n; i++) {
+        const wIdx = waypointIdxs[i];
+        DP[1 << i][i] = matrix[startIdx][wIdx];
+      }
+
+      for (let mask = 0; mask < (1 << n); mask++) {
+        for (let last = 0; last < n; last++) {
+          if (!(mask & (1 << last))) continue;
+          const lastIdx = waypointIdxs[last];
+          const cost = DP[mask][last];
+          if (!isFinite(cost)) continue;
+
+          for (let nxt = 0; nxt < n; nxt++) {
+            if (mask & (1 << nxt)) continue;
+            const nxtIdx = waypointIdxs[nxt];
+            const nmask = mask | (1 << nxt);
+            const cand = cost + matrix[lastIdx][nxtIdx];
+            if (cand < DP[nmask][nxt]) {
+              DP[nmask][nxt] = cand;
+              parent[nmask][nxt] = last;
+            }
+          }
+        }
+      }
+
+      const full = (1 << n) - 1;
+      let bestLast = 0;
+      let bestCost = Infinity;
+
+      for (let last = 0; last < n; last++) {
+        const lastIdx = waypointIdxs[last];
+        const cand = DP[full][last] + matrix[lastIdx][endIdx];
+        if (cand < bestCost) {
+          bestCost = cand;
+          bestLast = last;
+        }
+      }
+
+      const orderWaypoints = [];
+      let mask = full;
+      let cur = bestLast;
+      while (cur !== -1) {
+        orderWaypoints.push(waypointIdxs[cur]);
+        const prev = parent[mask][cur];
+        mask = mask & ~(1 << cur);
+        cur = prev;
+      }
+      orderWaypoints.reverse();
+
+      return [startIdx, ...orderWaypoints, endIdx];
+    }
+
+    function nearestNeighborFixed(points) {
+      if (points.length <= 2) return points;
+      const start = points[0];
+      const end = points[points.length - 1];
+      const remaining = points.slice(1, -1);
+      const route = [start];
+      let cur = start;
+
+      while (remaining.length) {
+        let bestI = 0, bestD = Infinity;
+        for (let i = 0; i < remaining.length; i++) {
+          const p = remaining[i];
+          const d = getDistance(cur.lat, cur.lng, p.lat, p.lng);
+          if (d < bestD) { bestD = d; bestI = i; }
+        }
+        cur = remaining.splice(bestI, 1)[0];
+        route.push(cur);
+      }
+      route.push(end);
+      return route;
+    }
+
+    function drawRouteSimplePolyline(route) {
+      clearRouteLayersOnly();
+      const latlngs = route.map(p => [p.lat, p.lng]);
+
+      routeLayer = L.polyline(latlngs, {
+        color: "#6366f1",
+        weight: 4,
+        opacity: 0.85,
+        dashArray: "10, 10",
+        lineCap: "round"
+      }).addTo(map);
+
+      routeNumberMarkers = route.map((p, idx) => {
+        return L.marker([p.lat, p.lng], {
+          icon: L.divIcon({
+            className: "route-number-marker",
+            html: `<div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">${idx + 1}</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+          })
+        }).addTo(map);
+      });
+
+      map.fitBounds(latlngs, { padding: [50, 50] });
+    }
+
+    function showRouteInfoWithTotals(route, distKm, durMin) {
+      const panel = document.getElementById("route-info");
+      const details = document.getElementById("route-details");
+
+      let html = `<ol class="list-decimal list-inside space-y-1">`;
+      route.forEach(p => html += `<li class="truncate">${escapeHtml(p.address)}</li>`);
+      html += `</ol>`;
+      html += `
+        <div class="mt-3 pt-3 border-t border-slate-600">
+          <p class="font-semibold text-emerald-400">Distancia total: ${distKm.toFixed(2)} km</p>
+          <p class="text-xs text-slate-400 mt-1">Duración total: ${Math.round(durMin)} min</p>
+        </div>
+      `;
+
+      details.innerHTML = html;
+      panel.classList.remove("hidden");
+    }
+
+    async function calculateRoute() {
+      try {
+        if (selectedIds.length < 1) {
+          showToast("Seleccioná al menos 1 punto intermedio", "warning");
+          return;
+        }
+
+        const startSelVal = document.getElementById("start-select").value;
+        const endSelVal = document.getElementById("end-select").value;
+        const startNew = document.getElementById("start-new").value.trim();
+        const endNew = document.getElementById("end-new").value.trim();
+
+        if (!startSelVal) { showToast("Elegí un punto de partida", "warning"); return; }
+        if (!endSelVal) { showToast("Elegí un punto de finalización", "warning"); return; }
+
+        setLoading(true, "Preparando inicio/fin...");
+
+        const pointFromExisting = (id) => {
+          const a = addresses.find(x => x.id === id);
+          if (!a || !a.lat || !a.lng) return null;
+          return { lat: a.lat, lng: a.lng, address: a.address };
+        };
+
+        // START
+        if (startSelVal === "__NEW__") {
+          if (!startNew) { setLoading(false); showToast("Ingresá dirección de partida", "warning"); return; }
+          setLoading(true, "Geocodificando punto de partida...");
+          const c = await geocodeAddress(normalizeAddressForGeocode(startNew));
+          if (!c) { setLoading(false); showToast("No pude geocodificar el punto de partida", "error"); return; }
+          startPoint = { ...c, address: startNew };
+        } else {
+          const p = pointFromExisting(startSelVal);
+          if (!p) { setLoading(false); showToast("Punto de partida inválido", "error"); return; }
+          startPoint = p;
+        }
+
+        // END
+        if (endSelVal === "__NEW__") {
+          if (!endNew) { setLoading(false); showToast("Ingresá dirección de finalización", "warning"); return; }
+          setLoading(true, "Geocodificando punto final...");
+          const c = await geocodeAddress(normalizeAddressForGeocode(endNew));
+          if (!c) { setLoading(false); showToast("No pude geocodificar el punto final", "error"); return; }
+          endPoint = { ...c, address: endNew };
+        } else {
+          const p = pointFromExisting(endSelVal);
+          if (!p) { setLoading(false); showToast("Punto final inválido", "error"); return; }
+          endPoint = p;
+        }
+
+        // MIDPOINTS (selected)
+        const mid = selectedIds
+          .map(id => addresses.find(a => a.id === id))
+          .filter(Boolean)
+          .filter(a => a.lat && a.lng)
+          .map(a => ({ lat: a.lat, lng: a.lng, address: a.address, _id: a.id }));
+
+        // remove if equals start/end (when they come from existing ids)
+        const startId = (startSelVal !== "__NEW__") ? startSelVal : null;
+        const endId = (endSelVal !== "__NEW__") ? endSelVal : null;
+        const midFiltered = mid.filter(p => p._id !== startId && p._id !== endId);
+
+        if (midFiltered.length === 0) {
+          setLoading(false);
+          showToast("Seleccioná al menos 1 punto intermedio distinto de inicio/fin", "warning");
+          return;
+        }
+        if (midFiltered.length > config.maxRoutePoints) {
+          setLoading(false);
+          showToast(`Máximo ${config.maxRoutePoints} puntos intermedios`, "warning");
+          return;
+        }
+
+        const points = [startPoint, ...midFiltered, endPoint];
+
+        // OSRM matrix
+        setLoading(true, "Calculando matriz de tiempos (OSRM)...");
+        let table;
+        try {
+          table = await osrmTableDriving(points);
+        } catch (e) {
+          console.error(e);
+          setLoading(false);
+          showToast("OSRM no respondió. Uso ruta simple (aprox).", "warning");
+          const approx = nearestNeighborFixed(points);
+          drawRouteSimplePolyline(approx);
+
+          // totals approx
+          let dist = 0;
+          for (let i = 1; i < approx.length; i++) {
+            dist += getDistance(approx[i-1].lat, approx[i-1].lng, approx[i].lat, approx[i].lng);
+          }
+          showRouteInfoWithTotals(approx, dist, dist * 2);
+          return;
+        }
+
+        const durations = table.durations;
+        if (!durations) throw new Error("OSRM no devolvió durations");
+
+        const startIdx = 0;
+        const endIdx = points.length - 1;
+        const waypointIdxs = [];
+        for (let i = 1; i < points.length - 1; i++) waypointIdxs.push(i);
+
+        setLoading(true, "Optimizando orden (ruta óptima)...");
+        const orderIdxs = solveOptimalPathFixedStartEnd(durations, startIdx, endIdx, waypointIdxs);
+        const orderedPoints = orderIdxs.map(i => points[i]);
+
+        setLoading(true, "Trazando ruta por calles (OSRM)...");
+        const routeRes = await osrmRouteDriving(orderedPoints);
+        if (!routeRes.routes || !routeRes.routes.length) throw new Error("OSRM route vacío");
+
+        clearRouteLayersOnly();
+        const geo = routeRes.routes[0].geometry;
+        routeLayer = L.geoJSON(geo, { style: { color: "#6366f1", weight: 4, opacity: 0.9 } }).addTo(map);
+
+        routeNumberMarkers = orderedPoints.map((p, idx) => {
+          return L.marker([p.lat, p.lng], {
+            icon: L.divIcon({
+              className: "route-number-marker",
+              html: `<div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">${idx + 1}</div>`,
+              iconSize: [28, 28],
+              iconAnchor: [14, 14]
+            })
+          }).addTo(map);
+        });
+
+        const bounds = orderedPoints.map(p => [p.lat, p.lng]);
+        map.fitBounds(bounds, { padding: [50, 50] });
+
+        const distKm = routeRes.routes[0].distance / 1000;
+        const durMin = routeRes.routes[0].duration / 60;
+        showRouteInfoWithTotals(orderedPoints, distKm, durMin);
+
+        setLoading(false);
+        showToast("Percorso óptimo calculado ✅", "success");
+      } catch (err) {
+        console.error(err);
+        setLoading(false);
+        showToast("Error calculando ruta", "error");
+      }
+    }
+
     // ========= UI RENDER =========
     function updateUI() {
       document.getElementById("app-title").textContent = config.appTitle;
       document.getElementById("address-count").textContent = `${addresses.length} direccion${addresses.length !== 1 ? "es" : ""}`;
       document.getElementById("selected-count").textContent = `${selectedIds.length}/${config.maxRoutePoints} seleccionados`;
-      document.getElementById("calc-route-btn").disabled = selectedIds.length < 2;
+
+      // Habilitar según seleccionados (validación completa al calcular)
+      document.getElementById("calc-route-btn").disabled = selectedIds.length < 1;
 
       renderAddressList();
+      updateStartEndSelectors();
     }
 
     function renderAddressList() {
@@ -684,11 +922,9 @@
         `;
       }).join("");
 
-      // attach events (avoid inline onclick in static export)
       container.querySelectorAll(".address-card").forEach(card => {
         const id = card.getAttribute("data-id");
         card.addEventListener("click", (e) => {
-          // if click on delete button, ignore
           if (e.target.closest(".delete-btn")) return;
           toggleAddressSelection(id);
         });
@@ -720,10 +956,14 @@
       if (!deleteTargetId) return;
       const id = deleteTargetId;
 
-      // remove from addresses
       addresses = addresses.filter(a => a.id !== id);
-      // remove from selected
       selectedIds = selectedIds.filter(x => x !== id);
+
+      // si era start/end seleccionados, resetear selects
+      const startSel = document.getElementById("start-select");
+      const endSel = document.getElementById("end-select");
+      if (startSel.value === id) startSel.value = "";
+      if (endSel.value === id) endSel.value = "";
 
       hideDeleteModal();
       showToast("Dirección eliminada", "success");
@@ -746,37 +986,32 @@
       const zoneInput = document.getElementById("zone-input");
       const postalInput = document.getElementById("postal-input");
 
-      let address = addressInput.value.trim();
+      const address = addressInput.value.trim();
       if (!address) {
         showToast("Ingresa una dirección", "warning");
         return;
       }
 
-      // mejorar geocode: si no trae ciudad, sugerir Bologna
-      const geocodeQuery = normalizeAddressForGeocode(address);
-
       setLoading(true, "Geocodificando dirección...");
       try {
-        const coords = await geocodeAddress(geocodeQuery);
+        const coords = await geocodeAddress(normalizeAddressForGeocode(address));
         if (!coords) {
           showToast("No se pudo geocodificar la dirección", "error");
           setLoading(false);
           return;
         }
 
-        const newAddress = {
-          id: crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString() + Math.random().toString(16).slice(2)),
+        const id = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString() + Math.random().toString(16).slice(2)));
+        addresses.push({
+          id,
           address,
           zone: zoneInput.value.trim() || "",
           postal_code: postalInput.value.trim() || "",
           lat: coords.lat,
           lng: coords.lng,
           created_at: new Date().toISOString()
-        };
+        });
 
-        addresses.push(newAddress);
-
-        // clear inputs
         addressInput.value = "";
         zoneInput.value = "";
         postalInput.value = "";
@@ -812,7 +1047,6 @@
 
       dropZone.addEventListener("click", () => fileInput.click());
 
-      // drag drop
       ["dragenter", "dragover", "dragleave", "drop"].forEach(name => {
         dropZone.addEventListener(name, (e) => { e.preventDefault(); e.stopPropagation(); });
       });
@@ -852,19 +1086,12 @@
       reader.onload = (e) => {
         try {
           let data = [];
-          if (file.name.toLowerCase().endsWith(".csv")) {
-            data = parseCSV(e.target.result);
-          } else if (file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls")) {
-            data = parseXLSX(e.target.result);
-          } else {
-            showToast("Formato de archivo no soportado", "error");
-            return;
-          }
+          const name = file.name.toLowerCase();
+          if (name.endsWith(".csv")) data = parseCSV(e.target.result);
+          else if (name.endsWith(".xlsx") || name.endsWith(".xls")) data = parseXLSX(e.target.result);
+          else { showToast("Formato de archivo no soportado", "error"); return; }
 
-          if (!data || data.length === 0) {
-            showToast("No se encontraron datos en el archivo", "error");
-            return;
-          }
+          if (!data || data.length === 0) { showToast("No se encontraron datos en el archivo", "error"); return; }
 
           importedData = data;
           populateColumnSelectors(data);
@@ -880,7 +1107,6 @@
     }
 
     function parseCSV(text) {
-      // Soporta , y ; de forma básica
       const raw = text.trim();
       if (!raw) return [];
       const lines = raw.split(/\r?\n/);
@@ -901,9 +1127,7 @@
 
     function parseXLSX(arrayBuffer) {
       const wb = XLSX.read(arrayBuffer, { type: "array" });
-      const firstSheetName = wb.SheetNames[0];
-      const ws = wb.Sheets[firstSheetName];
-      // defval: "" para que no vengan undefined
+      const ws = wb.Sheets[wb.SheetNames[0]];
       return XLSX.utils.sheet_to_json(ws, { defval: "" });
     }
 
@@ -941,10 +1165,7 @@
       const zoneCol = document.getElementById("zone-column").value;
       const postalCol = document.getElementById("postal-column").value;
 
-      if (!addressCol) {
-        showToast("Selecciona una columna de Dirección", "warning");
-        return;
-      }
+      if (!addressCol) { showToast("Selecciona una columna de Dirección", "warning"); return; }
 
       if (addresses.length + importedData.length > config.maxAddresses) {
         showToast(`Solo puedes agregar ${config.maxAddresses - addresses.length} más direcciones`, "warning");
@@ -966,30 +1187,27 @@
         let addr = (row[addressCol] ?? "").toString().trim();
         if (!addr) continue;
 
-        const normalized = normalizeAddressForGeocode(addr);
-
         try {
-          const coords = await geocodeAddress(normalized);
+          const coords = await geocodeAddress(normalizeAddressForGeocode(addr));
           if (!coords) { errors++; continue; }
 
-          const newAddress = {
-            id: crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString() + Math.random().toString(16).slice(2)),
+          const id = (crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString() + Math.random().toString(16).slice(2)));
+          addresses.push({
+            id,
             address: addr,
             zone: zoneCol ? (row[zoneCol] ?? "").toString().trim() : "",
             postal_code: postalCol ? (row[postalCol] ?? "").toString().trim() : "",
             lat: coords.lat,
             lng: coords.lng,
             created_at: new Date().toISOString()
-          };
+          });
 
-          addresses.push(newAddress);
           success++;
         } catch (err) {
           console.error("Import error:", err);
           errors++;
         }
 
-        // anti rate-limit
         await sleep(config.importGeocodeDelayMs);
       }
 
@@ -997,13 +1215,9 @@
       importBtn.disabled = false;
       importBtn.textContent = original;
 
-      if (success > 0) {
-        showToast(`✓ ${success} importadas${errors ? ` (${errors} errores)` : ""}`, "success");
-      } else {
-        showToast("No se pudieron importar direcciones", "error");
-      }
+      if (success > 0) showToast(`✓ ${success} importadas${errors ? ` (${errors} errores)` : ""}`, "success");
+      else showToast("No se pudieron importar direcciones", "error");
 
-      // reset import UI
       document.getElementById("import-form-section").classList.add("hidden");
       document.getElementById("file-input").value = "";
       document.getElementById("file-preview").classList.add("hidden");
@@ -1023,10 +1237,7 @@
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
     }
-    function escapeAttr(str) {
-      // para atributos simples
-      return escapeHtml(str).replaceAll("`", "&#096;");
-    }
+    function escapeAttr(str) { return escapeHtml(str).replaceAll("`", "&#096;"); }
 
     // ========= INIT =========
     function init() {
@@ -1057,6 +1268,10 @@
       document.getElementById("calc-route-btn").addEventListener("click", calculateRoute);
       document.getElementById("clear-route-btn").addEventListener("click", clearRoute);
 
+      // Start/End selects
+      document.getElementById("start-select").addEventListener("change", () => updateStartEndSelectors());
+      document.getElementById("end-select").addEventListener("change", () => updateStartEndSelectors());
+
       // Delete modal
       document.getElementById("cancel-delete").addEventListener("click", hideDeleteModal);
       document.getElementById("confirm-delete").addEventListener("click", deleteAddress);
@@ -1074,7 +1289,7 @@
         if (window.innerWidth < 1024) document.getElementById("sidebar").classList.add("-translate-x-full");
       });
 
-      showToast("Listo. Agregá direcciones o importá CSV/XLSX.", "info");
+      showToast("Listo. Importá direcciones, seleccioná puntos y definí inicio/fin.", "info");
     }
 
     init();
