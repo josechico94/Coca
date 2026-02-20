@@ -1,620 +1,1081 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FantaPRO Dashboard</title>
-    <!-- Carga de Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Carga de íconos (Heroicons) -->
-    <script type="module" src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.esm.js"></script>
-    <script nomodule src="https://unpkg.com/ionicons@5.5.2/dist/ionicons/ionicons.js"></script>
-    <style>
-        /* Fuente Inter */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6; /* Gris claro de fondo */
-        }
-        /* Clases para los roles */
-        .role-P { background-color: #fef08a; color: #a16207; } /* Amarillo */
-        .role-D { background-color: #c7d2fe; color: #3730a3; } /* Azul */
-        .role-C { background-color: #bbf7d0; color: #15803d; } /* Verde */
-        .role-A { background-color: #fecaca; color: #b91c1c; } /* Rojo */
-
-        /* Scrollbar personalizada */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #c7c7c7;
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #a3a3a3;
-        }
-        
-        /* Estilo para la sección de plantilla fija */
-        #mia-rosa-container {
-            position: sticky;
-            top: 1.5rem; /* Ajuste del sticky top */
-            height: calc(100vh - 3rem); /* Altura de la ventana menos el padding */
-        }
-    </style>
-</head>
-<body class="bg-gray-100 p-4 md:p-6">
-
-    <!-- Contenedor principal -->
-    <div class="max-w-screen-2xl mx-auto">
-
-        <!-- Cabecera y Autenticación -->
-        <header class="mb-4 p-4 bg-white rounded-lg shadow-sm flex flex-col md:flex-row justify-between items-center">
-            <h1 class="text-3xl font-bold text-gray-800">
-                <span class="text-indigo-600">Fanta</span><span class="text-gray-600">PRO</span> Dashboard
-            </h1>
-            <div id="auth-container" class="mt-4 md:mt-0 text-right">
-                <button id="auth-button" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-300">
-                    Cargando...
-                </button>
-                <p id="user-id" class="text-xs text-gray-400 mt-1 font-mono"></p>
-            </div>
-        </header>
-
-        <!-- Contenedor de dos columnas -->
-        <div class="flex flex-col lg:flex-row gap-6">
-
-            <!-- Columna Izquierda: Lista de Jugadores y Filtros -->
-            <main class="w-full lg:w-2/3">
-                
-                <!-- Controles de Filtros -->
-                <div class="p-4 bg-white rounded-lg shadow-sm mb-4">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <!-- Filtro por Rol -->
-                        <div>
-                            <label for="filter-role" class="block text-sm font-medium text-gray-700 mb-1">Filtrar por Rol</label>
-                            <select id="filter-role" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                <option value="all">Todos los Roles</option>
-                                <option value="P">Portieri (P)</option>
-                                <option value="D">Difensori (D)</option>
-                                <option value="C">Centrocampisti (C)</option>
-                                <option value="A">Attaccanti (A)</option>
-                            </select>
-                        </div>
-                        
-                        <!-- Filtro por Equipo -->
-                        <div>
-                            <label for="filter-team" class="block text-sm font-medium text-gray-700 mb-1">Filtrar por Equipo</label>
-                            <select id="filter-team" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                <option value="all">Todos los Equipos</option>
-                                <!-- Los equipos se cargarán dinámicamente -->
-                            </select>
-                        </div>
-
-                        <!-- Ordenar por -->
-                        <div>
-                            <label for="sort-by" class="block text-sm font-medium text-gray-700 mb-1">Ordenar por</label>
-                            <select id="sort-by" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                <option value="fm_desc">FantaMedia (desc)</option>
-                                <option value="fm_asc">FantaMedia (asc)</option>
-                                <option value="mv_desc">Media Voto (desc)</option>
-                                <option value="nome_asc">Nombre (A-Z)</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Grid de Jugadores -->
-                <div id="loading-players" class="text-center p-10">
-                    <p class="text-lg text-gray-600">Cargando jugadores...</p>
-                </div>
-                <div id="player-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    <!-- Las tarjetas de jugadores se insertarán aquí -->
-                </div>
-            </main>
-
-            <!-- Columna Derecha: Mi Plantilla (Sticky) -->
-            <aside class="w-full lg:w-1/3">
-                <div id="mia-rosa-container" class="bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
-                    <div class="p-4 border-b border-gray-200">
-                        <h2 class="text-xl font-bold text-gray-800">La Mia Rosa (<span id="rosa-count">0</span>/25)</h2>
-                        <p class="text-sm text-gray-500">Tu plantilla se guarda automáticamente.</p>
-                    </div>
-                    
-                    <!-- Contenedor scrollable para la lista de jugadores -->
-                    <div id="mia-rosa-list" class="flex-grow overflow-y-auto p-4 space-y-4">
-                        <!-- Secciones por Rol -->
-                        <div id="rosa-P-container">
-                            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Porteros (<span id="count-P">0</span>)</h3>
-                            <div id="rosa-P" class="space-y-2"></div>
-                        </div>
-                        <div id="rosa-D-container">
-                            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Defensas (<span id="count-D">0</span>)</h3>
-                            <div id="rosa-D" class="space-y-2"></div>
-                        </div>
-                        <div id="rosa-C-container">
-                            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Centrocampistas (<span id="count-C">0</span>)</h3>
-                            <div id="rosa-C" class="space-y-2"></div>
-                        </div>
-                        <div id="rosa-A-container">
-                            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Delanteros (<span id="count-A">0</span>)</h3>
-                            <div id="rosa-A" class="space-y-2"></div>
-                        </div>
-                        
-                        <div id="rosa-empty" class="text-center text-gray-400 py-10">
-                            <ion-icon name="shirt-outline" class="text-4xl"></ion-icon>
-                            <p>Tu plantilla está vacía.</p>
-                            <p class="text-xs">Añade jugadores desde la lista.</p>
-                        </div>
-                    </div>
-                </div>
-            </aside>
-
-        </div>
+<!doctype html>
+<html lang="es" class="h-full">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Planificador de Rutas</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="/_sdk/data_sdk.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'DM Sans', sans-serif; }
+    .leaflet-container { background: #1a1a2e; }
+    .custom-marker { 
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border: 3px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+    }
+    .selected-marker {
+      background: linear-gradient(135deg, #f59e0b, #ef4444) !important;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    .route-line {
+      stroke: #6366f1;
+      stroke-width: 4;
+      stroke-linecap: round;
+      fill: none;
+    }
+    .toast {
+      animation: slideIn 0.3s ease-out;
+    }
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .address-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      transition: all 0.3s ease;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    }
+    .filter-chip {
+      transition: all 0.2s ease;
+    }
+    .filter-chip:hover {
+      background: rgba(99, 102, 241, 0.1);
+    }
+    .filter-chip.active {
+      background: #6366f1;
+      color: white;
+    }
+  </style>
+  <style>body { box-sizing: border-box; }</style>
+ </head>
+ <body class="h-full bg-slate-900 text-white overflow-hidden">
+  <div id="app" class="h-full flex flex-col">
+   <!-- Header -->
+   <header class="bg-slate-800/80 backdrop-blur-lg border-b border-slate-700 px-4 py-3 flex items-center justify-between flex-shrink-0">
+    <div class="flex items-center gap-3">
+     <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+      </svg>
+     </div>
+     <h1 id="app-title" class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Planificador de Rutas</h1>
     </div>
-
-    <!-- Modal de Confirmación para Eliminar -->
-    <div id="delete-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center hidden z-50">
-      <div class="relative mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-        <div class="mt-3 text-center">
-          <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
-            <ion-icon name="trash-outline" class="text-red-600 text-2xl"></ion-icon>
-          </div>
-          <h3 class="text-lg leading-6 font-medium text-gray-900 mt-2">Eliminar Jugador</h3>
-          <div class="mt-2 px-7 py-3">
-            <p class="text-sm text-gray-500">
-              ¿Estás seguro de que quieres eliminar a <strong id="modal-player-name"></strong> de tu plantilla?
-            </p>
-          </div>
-          <div class="items-center px-4 py-3 gap-2 flex justify-center">
-            <button id="modal-cancel" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 w-24">
-              Cancelar
-            </button>
-            <button id="modal-confirm" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 w-24">
-              Eliminar
-            </button>
-          </div>
+    <div class="flex items-center gap-2">
+     <span id="address-count" class="text-sm text-slate-400">0 direcciones</span> <button id="toggle-panel" class="lg:hidden p-2 rounded-lg bg-slate-700 hover:bg-slate-600">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+      </svg></button>
+    </div>
+   </header><!-- Main Content -->
+   <main class="flex-1 flex overflow-hidden">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-full lg:w-96 bg-slate-800/50 backdrop-blur border-r border-slate-700 flex flex-col overflow-hidden absolute lg:relative z-20 h-full lg:h-auto transform -translate-x-full lg:translate-x-0 transition-transform">
+     <!-- Add Address Form -->
+     <div class="p-4 border-b border-slate-700 flex-shrink-0">
+      <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Nueva Dirección</h2>
+      <form id="address-form" class="space-y-3">
+       <input type="text" id="address-input" placeholder="Dirección completa..." class="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all">
+       <div class="grid grid-cols-2 gap-3">
+        <input type="text" id="zone-input" placeholder="Zona" class="px-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl focus:outline-none focus:border-indigo-500 transition-all"> <input type="text" id="postal-input" placeholder="Código Postal" class="px-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl focus:outline-none focus:border-indigo-500 transition-all">
+       </div><button type="submit" id="add-btn" class="w-full py-3 btn-primary text-white font-semibold rounded-xl flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg><span id="add-btn-text">Agregar Dirección</span> </button>
+      </form><button id="toggle-import-form" class="w-full mt-3 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all">
+       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4M9 9H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V11a2 2 0 00-2-2h-4m-6-2h6m0 0V7a2 2 0 00-2-2h-2a2 2 0 00-2 2v2z" />
+       </svg> Importar CSV/Excel </button>
+     </div>
+     <div id="import-form-section" class="p-4 border-b border-slate-700 flex-shrink-0 hidden">
+      <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Importar Direcciones</h2>
+      <div class="space-y-3">
+       <div class="border-2 border-dashed border-slate-600 rounded-xl p-4 text-center cursor-pointer hover:border-indigo-500 transition-all" id="drop-zone">
+        <svg class="w-8 h-8 mx-auto mb-2 text-slate-400" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4M9 9H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V11a2 2 0 00-2-2h-4m-6-2h6m0 0V7a2 2 0 00-2-2h-2a2 2 0 00-2 2v2z" />
+        </svg>
+        <p class="text-sm font-medium">Arrastra tu archivo aquí</p>
+        <p class="text-xs text-slate-400 mt-1">O haz clic para seleccionar</p><input type="file" id="file-input" accept=".csv,.xlsx,.xls" class="hidden">
+       </div>
+       <div id="file-preview" class="hidden bg-slate-700/50 rounded-xl p-3">
+        <p class="text-sm font-medium mb-2">Archivo seleccionado: <span id="file-name" class="text-indigo-400"></span></p>
+        <div class="space-y-2"><select id="address-column" class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm appearance-none"> <option value="">Selecciona columna de Dirección</option> </select> <select id="zone-column" class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm appearance-none"> <option value="">Selecciona columna de Zona (opcional)</option> </select> <select id="postal-column" class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-sm appearance-none"> <option value="">Selecciona columna de Código Postal (opcional)</option> </select>
         </div>
+        <div class="flex gap-2 mt-3"><button type="button" id="import-btn" class="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition-all text-sm">
+          <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg> Importar </button> <button type="button" id="cancel-import-btn" class="flex-1 py-2.5 bg-slate-600 hover:bg-slate-500 text-white font-semibold rounded-lg transition-all text-sm"> Cancelar </button>
+        </div>
+       </div>
       </div>
+     </div><!-- Filters -->
+     <div class="p-4 border-b border-slate-700 flex-shrink-0">
+      <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Filtros</h2>
+      <div class="space-y-3">
+       <div class="relative">
+        <select id="zone-filter" class="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl appearance-none focus:outline-none focus:border-indigo-500 cursor-pointer"> <option value="">Todas las zonas</option> </select>
+        <svg class="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+       </div>
+       <div class="relative">
+        <select id="postal-filter" class="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600 rounded-xl appearance-none focus:outline-none focus:border-indigo-500 cursor-pointer"> <option value="">Todos los códigos postales</option> </select>
+        <svg class="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+       </div>
+       <div>
+        <label class="text-sm text-slate-400 mb-1 block">Radio de distancia: <span id="distance-value">50</span> km</label> <input type="range" id="distance-filter" min="1" max="100" value="50" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+       </div>
+      </div>
+     </div><!-- Route Planner -->
+     <div class="p-4 border-b border-slate-700 flex-shrink-0">
+      <div class="flex items-center justify-between mb-3">
+       <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Planificar Ruta</h2><span id="selected-count" class="text-xs px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded-full">0/10 seleccionados</span>
+      </div>
+      <p class="text-xs text-slate-500 mb-3">Haz clic en las direcciones para seleccionar hasta 10 puntos</p>
+      <div class="flex gap-2">
+       <button id="calc-route-btn" class="flex-1 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+        </svg> Calcular Ruta </button> <button id="clear-route-btn" class="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition-all">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg></button>
+      </div>
+     </div><!-- Address List -->
+     <div class="flex-1 overflow-y-auto p-4">
+      <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Direcciones</h2>
+      <div id="address-list" class="space-y-2">
+       <div class="text-center py-8 text-slate-500">
+        <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+        <p>No hay direcciones cargadas</p>
+        <p class="text-xs mt-1">Agrega tu primera dirección arriba</p>
+       </div>
+      </div>
+     </div>
+    </aside><!-- Map Container -->
+    <div class="flex-1 relative">
+     <div id="map" class="absolute inset-0"></div><!-- Route Info Panel -->
+     <div id="route-info" class="absolute top-4 right-4 bg-slate-800/90 backdrop-blur-lg rounded-2xl p-4 shadow-xl border border-slate-700 hidden max-w-xs">
+      <h3 class="font-bold text-lg mb-2 flex items-center gap-2">
+       <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+       </svg> Ruta Optimizada</h3>
+      <div id="route-details" class="text-sm text-slate-300 space-y-1"></div>
+     </div><!-- Loading Overlay -->
+     <div id="loading" class="absolute inset-0 bg-slate-900/80 backdrop-blur flex items-center justify-center hidden z-30">
+      <div class="text-center">
+       <div class="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+       <p class="text-slate-300">Geocodificando dirección...</p>
+      </div>
+     </div>
     </div>
+   </main><!-- Toast Container -->
+   <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div><!-- Delete Confirmation Modal -->
+   <div id="delete-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+    <div class="bg-slate-800 rounded-2xl p-6 max-w-sm mx-4 border border-slate-700 shadow-2xl">
+     <div class="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+      <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+      </svg>
+     </div>
+     <h3 class="text-lg font-bold text-center mb-2">¿Eliminar dirección?</h3>
+     <p id="delete-address-text" class="text-sm text-slate-400 text-center mb-6">Esta acción no se puede deshacer.</p>
+     <div class="flex gap-3">
+      <button id="cancel-delete" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold transition-all">Cancelar</button> <button id="confirm-delete" class="flex-1 py-2.5 bg-red-500 hover:bg-red-600 rounded-xl font-semibold transition-all">Eliminar</button>
+     </div>
+    </div>
+   </div>
+  </div>
+  <script>
+    // Default configuration
+    const defaultConfig = {
+      app_title: 'Planificador de Rutas',
+      add_button_text: 'Agregar Dirección',
+      background_color: '#0f172a',
+      surface_color: '#1e293b',
+      text_color: '#f1f5f9',
+      primary_color: '#6366f1',
+      secondary_color: '#8b5cf6'
+    };
 
-    <!-- Script de Firebase -->
-    <script type="module">
-        // Importaciones de Firebase
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { 
-            getAuth, 
-            signInAnonymously, 
-            onAuthStateChanged,
-            signInWithCustomToken
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { 
-            getFirestore, 
-            doc, 
-            setDoc, 
-            collection, 
-            onSnapshot,
-            addDoc,
-            deleteDoc,
-            query,
-            where,
-            getDocs
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    let config = { ...defaultConfig };
+    let addresses = [];
+    let selectedAddresses = [];
+    let markers = {};
+    let routeLayer = null;
+    let map = null;
+    let deleteTargetId = null;
+    let isLoading = false;
+    let importedData = null;
 
-        // --- CONFIGURACIÓN DE DATOS ---
-        const DATA_URL = "https://raw.githubusercontent.com/josechico94/Coca/refs/heads/main/fantapro_data.json"; // <-- ¡PEGA TU URL "RAW" DE GIST AQUÍ!
-        
-        // --- CONFIGURACIÓN DE FIREBASE ---
-        // Estas variables se inyectarán en el entorno de producción
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id-fantapro';
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    // Initialize map
+    function initMap() {
+      map = L.map('map', {
+        center: [-34.6037, -58.3816], // Buenos Aires default
+        zoom: 12,
+        zoomControl: true
+      });
 
-        let app, auth, db, userId;
-        let currentRosa = []; // Caché local de la plantilla
-        let unsubscribeRosa; // Función para detener el listener de Firestore
-        let DB_GIOCATORI = []; // La base de datos ahora se cargará dinámicamente
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 20
+      }).addTo(map);
+    }
 
-        // --- BASE DE DATOS ESTATICA DE JUGADORES (Datos Reales Simulados) ---
-        // (En una app real, esto vendría de una API, pero lo incrustamos aquí)
-        // ESTA SECCIÓN HA SIDO ELIMINADA Y SE CARGARÁ DESDE DATA_URL
-        
-        // --- INICIALIZACIÓN DE LA APP ---
+    // Geocode address using Nominatim
+    async function geocodeAddress(address) {
+      const encodedAddress = encodeURIComponent(address);
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1`);
+      const data = await response.json();
+      
+      if (data && data.length > 0) {
+        return {
+          lat: parseFloat(data[0].lat),
+          lng: parseFloat(data[0].lon)
+        };
+      }
+      return null;
+    }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // Iniciamos la carga de datos primero
-            initApp();
+    // Create custom marker
+    function createMarker(address, isSelected = false) {
+      const icon = L.divIcon({
+        className: `custom-marker ${isSelected ? 'selected-marker' : ''}`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+
+      const marker = L.marker([address.lat, address.lng], { icon })
+        .addTo(map)
+        .bindPopup(`
+          <div class="p-2">
+            <strong>${address.address}</strong><br>
+            <span class="text-sm">${address.zone || 'Sin zona'} - ${address.postal_code || 'Sin CP'}</span>
+          </div>
+        `);
+
+      marker.on('click', () => toggleAddressSelection(address.id));
+      return marker;
+    }
+
+    // Update markers on map
+    function updateMarkers() {
+      // Clear existing markers
+      Object.values(markers).forEach(marker => map.removeLayer(marker));
+      markers = {};
+
+      // Add markers for filtered addresses
+      const filtered = getFilteredAddresses();
+      filtered.forEach(addr => {
+        if (addr.lat && addr.lng) {
+          const isSelected = selectedAddresses.includes(addr.id);
+          markers[addr.id] = createMarker(addr, isSelected);
+        }
+      });
+
+      // Fit bounds if there are markers
+      if (filtered.length > 0) {
+        const bounds = filtered
+          .filter(a => a.lat && a.lng)
+          .map(a => [a.lat, a.lng]);
+        if (bounds.length > 0) {
+          map.fitBounds(bounds, { padding: [50, 50] });
+        }
+      }
+    }
+
+    // Get filtered addresses
+    function getFilteredAddresses() {
+      const zoneFilter = document.getElementById('zone-filter').value;
+      const postalFilter = document.getElementById('postal-filter').value;
+      const distanceFilter = parseInt(document.getElementById('distance-filter').value);
+
+      let filtered = [...addresses];
+
+      if (zoneFilter) {
+        filtered = filtered.filter(a => a.zone === zoneFilter);
+      }
+
+      if (postalFilter) {
+        filtered = filtered.filter(a => a.postal_code === postalFilter);
+      }
+
+      // Distance filter from map center
+      if (distanceFilter < 100 && filtered.length > 0) {
+        const center = map.getCenter();
+        filtered = filtered.filter(a => {
+          if (!a.lat || !a.lng) return false;
+          const distance = getDistance(center.lat, center.lng, a.lat, a.lng);
+          return distance <= distanceFilter;
+        });
+      }
+
+      return filtered;
+    }
+
+    // Calculate distance between two points (Haversine formula)
+    function getDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371; // Earth's radius in km
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+
+    // Toggle address selection for route
+    function toggleAddressSelection(id) {
+      const index = selectedAddresses.indexOf(id);
+      
+      if (index > -1) {
+        selectedAddresses.splice(index, 1);
+      } else if (selectedAddresses.length < 10) {
+        selectedAddresses.push(id);
+      } else {
+        showToast('Máximo 10 direcciones para la ruta', 'warning');
+        return;
+      }
+
+      updateUI();
+      updateMarkers();
+    }
+
+    // Calculate optimal route (nearest neighbor algorithm)
+    function calculateRoute() {
+      if (selectedAddresses.length < 2) {
+        showToast('Selecciona al menos 2 direcciones', 'warning');
+        return;
+      }
+
+      const selectedPoints = selectedAddresses
+        .map(id => addresses.find(a => a.id === id))
+        .filter(a => a && a.lat && a.lng);
+
+      if (selectedPoints.length < 2) {
+        showToast('Las direcciones seleccionadas no tienen coordenadas válidas', 'error');
+        return;
+      }
+
+      // Nearest neighbor algorithm for route optimization
+      const optimizedRoute = [];
+      const remaining = [...selectedPoints];
+      let current = remaining.shift();
+      optimizedRoute.push(current);
+
+      while (remaining.length > 0) {
+        let nearestIndex = 0;
+        let nearestDistance = Infinity;
+
+        remaining.forEach((point, index) => {
+          const dist = getDistance(current.lat, current.lng, point.lat, point.lng);
+          if (dist < nearestDistance) {
+            nearestDistance = dist;
+            nearestIndex = index;
+          }
         });
 
-        async function initApp() {
-            const loadingText = document.getElementById('loading-players');
-            
-            if (!DATA_URL || DATA_URL === "PEGA_AQUÍ_TU_URL_RAW_DE_GIST" || DATA_URL === "") {
-                loadingText.innerHTML = `
-                    <p class="text-lg text-red-600">Error: Falta la URL de datos.</p>
-                    <p class="text-sm text-gray-500">Por favor, edita el archivo HTML y añade la URL de tu Gist en la variable DATA_URL.</p>
-                `;
-                return;
-            }
+        current = remaining.splice(nearestIndex, 1)[0];
+        optimizedRoute.push(current);
+      }
 
-            try {
-                loadingText.innerHTML = `<p class="text-lg text-gray-600">Cargando datos de jugadores...</p>`;
-                const response = await fetch(DATA_URL);
-                if (!response.ok) {
-                    throw new Error(`Error al cargar datos: ${response.statusText}`);
-                }
-                DB_GIOCATORI = await response.json();
-                
-                // Una vez cargados los datos, continuamos con la inicialización
-                initAuth();
-                populateFilters();
-                renderPlayerList();
+      // Draw route on map
+      drawRoute(optimizedRoute);
 
-                // Añadimos listeners a los filtros
-                document.getElementById('filter-role').addEventListener('change', renderPlayerList);
-                document.getElementById('filter-team').addEventListener('change', renderPlayerList);
-                document.getElementById('sort-by').addEventListener('change', renderPlayerList);
+      // Show route info
+      showRouteInfo(optimizedRoute);
+    }
 
-                // Listeners del Modal
-                document.getElementById('modal-cancel').addEventListener('click', closeModal);
+    // Draw route polyline
+    function drawRoute(route) {
+      if (routeLayer) {
+        map.removeLayer(routeLayer);
+      }
 
-            } catch (error) {
-                console.error("Error al cargar datos de jugadores:", error);
-                loadingText.innerHTML = `
-                    <p class="text-lg text-red-600">Error al cargar datos.</p>
-                    <p class="text-sm text-gray-500">Verifica la URL de Gist y que el JSON sea válido.</p>
-                    <p class="text-xs text-gray-400 font-mono mt-2">${error.message}</p>
-                `;
-            }
+      const latlngs = route.map(p => [p.lat, p.lng]);
+      routeLayer = L.polyline(latlngs, {
+        color: '#6366f1',
+        weight: 4,
+        opacity: 0.8,
+        dashArray: '10, 10',
+        lineCap: 'round'
+      }).addTo(map);
+
+      // Add numbered markers
+      route.forEach((point, index) => {
+        L.marker([point.lat, point.lng], {
+          icon: L.divIcon({
+            className: 'route-number-marker',
+            html: `<div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">${index + 1}</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+          })
+        }).addTo(map);
+      });
+
+      map.fitBounds(latlngs, { padding: [50, 50] });
+    }
+
+    // Show route information panel
+    function showRouteInfo(route) {
+      const routeInfo = document.getElementById('route-info');
+      const routeDetails = document.getElementById('route-details');
+
+      let totalDistance = 0;
+      let html = '<ol class="list-decimal list-inside space-y-1">';
+      
+      route.forEach((point, index) => {
+        if (index > 0) {
+          totalDistance += getDistance(
+            route[index-1].lat, route[index-1].lng,
+            point.lat, point.lng
+          );
         }
+        html += `<li class="truncate">${point.address}</li>`;
+      });
+      
+      html += '</ol>';
+      html += `<div class="mt-3 pt-3 border-t border-slate-600">
+        <p class="font-semibold text-emerald-400">Distancia total: ${totalDistance.toFixed(2)} km</p>
+        <p class="text-xs text-slate-400 mt-1">Tiempo estimado: ~${Math.round(totalDistance * 2)} min</p>
+      </div>`;
 
-        // --- LÓGICA DE AUTENTICACIÓN ---
+      routeDetails.innerHTML = html;
+      routeInfo.classList.remove('hidden');
+    }
 
-        async function initAuth() {
-            try {
-                // Inicializar Firebase
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                const authButton = document.getElementById('auth-button');
-                authButton.disabled = true;
-
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        authButton.textContent = 'Conectado';
-                        authButton.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
-                        authButton.classList.add('bg-green-600', 'cursor-default');
-                        document.getElementById('user-id').textContent = `Tu User ID: ${userId}`;
-                        
-                        // Una vez autenticados, cargamos la plantilla
-                        loadRosa();
-                    } else {
-                        // Si no hay usuario, intentamos loguear
-                        authButton.textContent = 'Conectando...';
-                        try {
-                            if (initialAuthToken) {
-                                await signInWithCustomToken(auth, initialAuthToken);
-                            } else {
-                                await signInAnonymously(auth);
-                            }
-                        } catch (error) {
-                            console.error("Error al iniciar sesión:", error);
-                            authButton.textContent = 'Error de conexión';
-                            authButton.classList.remove('bg-indigo-600');
-                            authButton.classList.add('bg-red-600');
-                        }
-                    }
-                });
-
-            } catch (e) {
-                console.error("Error inicializando Firebase. ¿Falta configuración?", e);
-                document.getElementById('auth-button').textContent = 'Error de Config.';
-                document.getElementById('auth-button').classList.add('bg-red-600');
-            }
+    // Clear route
+    function clearRoute() {
+      selectedAddresses = [];
+      if (routeLayer) {
+        map.removeLayer(routeLayer);
+        routeLayer = null;
+      }
+      
+      // Remove numbered markers
+      map.eachLayer(layer => {
+        if (layer.options && layer.options.icon && layer.options.icon.options && 
+            layer.options.icon.options.className === 'route-number-marker') {
+          map.removeLayer(layer);
         }
+      });
 
-        // --- LÓGICA DE RENDERIZADO (VISTAS) ---
+      document.getElementById('route-info').classList.add('hidden');
+      updateUI();
+      updateMarkers();
+    }
 
-        function populateFilters() {
-            // Asegurarnos que DB_GIOCATORI esté cargado
-            if (!DB_GIOCATORI || DB_GIOCATORI.length === 0) return;
+    // Update filter dropdowns
+    function updateFilters() {
+      const zones = [...new Set(addresses.map(a => a.zone).filter(Boolean))];
+      const postalCodes = [...new Set(addresses.map(a => a.postal_code).filter(Boolean))];
 
-            const teams = [...new Set(DB_GIOCATORI.map(p => p.squadra))].sort();
-            const teamSelect = document.getElementById('filter-team');
-            
-            // Limpiamos opciones anteriores (excepto la primera)
-            while (teamSelect.options.length > 1) {
-                teamSelect.remove(1);
-            }
+      const zoneSelect = document.getElementById('zone-filter');
+      const postalSelect = document.getElementById('postal-filter');
 
-            teams.forEach(team => {
-                const option = document.createElement('option');
-                option.value = team;
-                option.textContent = team;
-                teamSelect.appendChild(option);
-            });
-        }
+      const currentZone = zoneSelect.value;
+      const currentPostal = postalSelect.value;
 
-        function renderPlayerList() {
-            const grid = document.getElementById('player-grid');
-            const loading = document.getElementById('loading-players');
-            grid.innerHTML = ''; // Limpiamos el grid
-            
-            // Si DB_GIOCATORI aún no se ha cargado (porque falló initApp), no hacemos nada más.
-            if (!DB_GIOCATORI || DB_GIOCATORI.length === 0) {
-                loading.style.display = 'block'; // Mantenemos el mensaje de carga/error
-                return;
-            }
-            
-            loading.style.display = 'none'; // Ocultamos el mensaje de carga si hay datos
+      zoneSelect.innerHTML = '<option value="">Todas las zonas</option>' +
+        zones.map(z => `<option value="${z}" ${z === currentZone ? 'selected' : ''}>${z}</option>`).join('');
 
-            // Obtenemos valores de filtros
-            const roleFilter = document.getElementById('filter-role').value;
-            const teamFilter = document.getElementById('filter-team').value;
-            const sortBy = document.getElementById('sort-by').value;
+      postalSelect.innerHTML = '<option value="">Todos los códigos postales</option>' +
+        postalCodes.map(p => `<option value="${p}" ${p === currentPostal ? 'selected' : ''}>${p}</option>`).join('');
+    }
 
-            // 1. Filtrar
-            let filteredPlayers = DB_GIOCATORI.filter(player => {
-                const matchesRole = (roleFilter === 'all') || (player.ruolo === roleFilter);
-                const matchesTeam = (teamFilter === 'all') || (player.squadra === teamFilter);
-                return matchesRole && matchesTeam;
-            });
+    // Render address list
+    function renderAddressList() {
+      const container = document.getElementById('address-list');
+      const filtered = getFilteredAddresses();
 
-            // 2. Ordenar
-            filteredPlayers.sort((a, b) => {
-                switch (sortBy) {
-                    case 'fm_asc': return a.fm - b.fm;
-                    case 'mv_desc': return b.mv - a.mv;
-                    case 'nome_asc': return a.nome.localeCompare(b.nome);
-                    case 'fm_desc':
-                    default:
-                        return b.fm - a.fm;
-                }
-            });
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-slate-500">
+            <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+            <p>${addresses.length === 0 ? 'No hay direcciones cargadas' : 'No hay resultados con los filtros actuales'}</p>
+            <p class="text-xs mt-1">${addresses.length === 0 ? 'Agrega tu primera dirección arriba' : 'Intenta cambiar los filtros'}</p>
+          </div>
+        `;
+        return;
+      }
 
-            // 3. Renderizar
-            if (filteredPlayers.length === 0) {
-                grid.innerHTML = `<p class="text-gray-500 md:col-span-2 xl:col-span-3 text-center">No se encontraron jugadores con esos filtros.</p>`;
-                return;
-            }
-            filteredPlayers.forEach(player => {
-                const playerCard = createPlayerCard(player);
-                grid.appendChild(playerCard);
-            });
-        }
+      container.innerHTML = filtered.map(addr => {
+        const isSelected = selectedAddresses.includes(addr.id);
+        const orderNum = selectedAddresses.indexOf(addr.id) + 1;
         
-        function createPlayerCard(player) {
-            const card = document.createElement('div');
-            card.className = 'bg-white rounded-lg shadow-md overflow-hidden p-4 transition duration-300 hover:shadow-xl';
-            
-            const isAdded = currentRosa.some(p => p.id === player.id);
+        return `
+          <div class="address-card bg-slate-700/50 rounded-xl p-3 cursor-pointer transition-all border-2 ${isSelected ? 'border-indigo-500' : 'border-transparent'}"
+               onclick="toggleAddressSelection('${addr.id}')">
+            <div class="flex items-start gap-3">
+              <div class="w-8 h-8 rounded-lg ${isSelected ? 'bg-indigo-500' : 'bg-slate-600'} flex items-center justify-center flex-shrink-0">
+                ${isSelected ? `<span class="font-bold text-sm">${orderNum}</span>` : `
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                </svg>`}
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-medium text-sm truncate">${addr.address}</p>
+                <p class="text-xs text-slate-400 mt-1">${addr.zone || 'Sin zona'} • ${addr.postal_code || 'Sin CP'}</p>
+              </div>
+              <button onclick="event.stopPropagation(); showDeleteModal('${addr.id}')" 
+                      class="p-1.5 rounded-lg hover:bg-slate-600 transition-all opacity-60 hover:opacity-100">
+                <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
 
-            card.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <div>
-                        <h3 class="text-lg font-bold text-gray-900">${player.nome}</h3>
-                        <p class="text-sm text-gray-600">${player.squadra}</p>
-                    </div>
-                    <span class="role-${player.ruolo} text-xs font-bold px-2 py-1 rounded-full">${player.ruolo}</span>
-                </div>
-                <div class="mt-4 grid grid-cols-3 gap-2 text-center">
-                    <div>
-                        <p class="text-xs text-gray-500">FantaMedia</p>
-                        <p class="text-xl font-semibold text-indigo-600">${player.fm.toFixed(2)}</p>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-500">Media Voto</p>
-                        <p class="text-xl font-semibold text-gray-700">${player.mv.toFixed(2)}</p>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-500">G/A</p>
-                        <p class="text-xl font-semibold text-gray-700">${player.gol}/${player.assist}</p>
-                    </div>
-                </div>
-                <div class="mt-4">
-                    <button 
-                        class="add-player-btn w-full px-3 py-2 rounded-md text-sm font-medium ${isAdded ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'}"
-                        data-player-id="${player.id}"
-                        ${isAdded ? 'disabled' : ''}
-                    >
-                        ${isAdded ? 'En la plantilla' : 'Añadir a la plantilla'}
-                    </button>
-                </div>
-            `;
+    // Show delete confirmation modal
+    function showDeleteModal(id) {
+      deleteTargetId = id;
+      const address = addresses.find(a => a.id === id);
+      document.getElementById('delete-address-text').textContent = address ? address.address : 'Esta dirección';
+      document.getElementById('delete-modal').classList.remove('hidden');
+    }
 
-            // Añadir listener al botón (si no está deshabilitado)
-            if (!isAdded) {
-                card.querySelector('.add-player-btn').addEventListener('click', (e) => {
-                    const playerId = parseInt(e.target.dataset.playerId);
-                    addPlayerToRosa(playerId);
-                });
-            }
+    // Hide delete modal
+    function hideDeleteModal() {
+      deleteTargetId = null;
+      document.getElementById('delete-modal').classList.add('hidden');
+    }
 
-            return card;
+    // Delete address
+    async function deleteAddress() {
+      if (!deleteTargetId) return;
+
+      const address = addresses.find(a => a.id === deleteTargetId);
+      if (!address) {
+        hideDeleteModal();
+        return;
+      }
+
+      const confirmBtn = document.getElementById('confirm-delete');
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '<span class="animate-spin">⏳</span>';
+
+      const result = await window.dataSdk.delete(address);
+      
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = 'Eliminar';
+      
+      if (result.isOk) {
+        showToast('Dirección eliminada', 'success');
+        // Remove from selected if present
+        const selIndex = selectedAddresses.indexOf(deleteTargetId);
+        if (selIndex > -1) {
+          selectedAddresses.splice(selIndex, 1);
+        }
+      } else {
+        showToast('Error al eliminar', 'error');
+      }
+      
+      hideDeleteModal();
+    }
+
+    // Show toast notification
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      const colors = {
+        success: 'bg-emerald-500',
+        error: 'bg-red-500',
+        warning: 'bg-amber-500',
+        info: 'bg-indigo-500'
+      };
+
+      toast.className = `toast ${colors[type]} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-2`;
+      toast.innerHTML = `
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          ${type === 'success' ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>' :
+            type === 'error' ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>' :
+            type === 'warning' ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>' :
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>'}
+        </svg>
+        <span>${message}</span>
+      `;
+
+      container.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // Show/hide loading
+    function setLoading(loading) {
+      isLoading = loading;
+      document.getElementById('loading').classList.toggle('hidden', !loading);
+    }
+
+    // Update UI elements
+    function updateUI() {
+      document.getElementById('address-count').textContent = `${addresses.length} direccion${addresses.length !== 1 ? 'es' : ''}`;
+      document.getElementById('selected-count').textContent = `${selectedAddresses.length}/10 seleccionados`;
+      
+      const calcBtn = document.getElementById('calc-route-btn');
+      calcBtn.disabled = selectedAddresses.length < 2;
+      
+      renderAddressList();
+    }
+
+    // Update config-based UI
+    function updateConfigUI() {
+      document.getElementById('app-title').textContent = config.app_title || defaultConfig.app_title;
+      document.getElementById('add-btn-text').textContent = config.add_button_text || defaultConfig.add_button_text;
+    }
+
+    // Handle form submission
+    async function handleFormSubmit(e) {
+      e.preventDefault();
+      
+      if (addresses.length >= 999) {
+        showToast('Límite de 999 direcciones alcanzado', 'warning');
+        return;
+      }
+
+      const addressInput = document.getElementById('address-input');
+      const zoneInput = document.getElementById('zone-input');
+      const postalInput = document.getElementById('postal-input');
+
+      const address = addressInput.value.trim();
+      if (!address) {
+        showToast('Ingresa una dirección', 'warning');
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const coords = await geocodeAddress(address);
+        
+        if (!coords) {
+          showToast('No se pudo geocodificar la dirección', 'error');
+          setLoading(false);
+          return;
         }
 
-        function renderMiaRosa(rosaPlayers) {
-            // Limpiamos listas
-            const rosaEmpty = document.getElementById('rosa-empty');
-            const lists = {
-                P: document.getElementById('rosa-P'),
-                D: document.getElementById('rosa-D'),
-                C: document.getElementById('rosa-C'),
-                A: document.getElementById('rosa-A'),
+        const newAddress = {
+          id: Date.now().toString(),
+          address: address,
+          zone: zoneInput.value.trim() || '',
+          postal_code: postalInput.value.trim() || '',
+          lat: coords.lat,
+          lng: coords.lng,
+          created_at: new Date().toISOString()
+        };
+
+        const result = await window.dataSdk.create(newAddress);
+        
+        if (result.isOk) {
+          addressInput.value = '';
+          zoneInput.value = '';
+          postalInput.value = '';
+          showToast('Dirección agregada correctamente', 'success');
+        } else {
+          showToast('Error al guardar la dirección', 'error');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        showToast('Error al procesar la dirección', 'error');
+      }
+
+      setLoading(false);
+    }
+
+    // Data handler for SDK
+    const dataHandler = {
+      onDataChanged(data) {
+        addresses = data;
+        updateFilters();
+        updateUI();
+        updateMarkers();
+      }
+    };
+
+    // Element SDK handler
+    async function initElementSdk() {
+      if (window.elementSdk) {
+        await window.elementSdk.init({
+          defaultConfig,
+          onConfigChange: async (newConfig) => {
+            config = { ...config, ...newConfig };
+            updateConfigUI();
+          },
+          mapToCapabilities: (cfg) => ({
+            recolorables: [
+              {
+                get: () => cfg.primary_color || defaultConfig.primary_color,
+                set: (v) => { cfg.primary_color = v; window.elementSdk.setConfig({ primary_color: v }); }
+              },
+              {
+                get: () => cfg.secondary_color || defaultConfig.secondary_color,
+                set: (v) => { cfg.secondary_color = v; window.elementSdk.setConfig({ secondary_color: v }); }
+              }
+            ],
+            borderables: [],
+            fontEditable: undefined,
+            fontSizeable: undefined
+          }),
+          mapToEditPanelValues: (cfg) => new Map([
+            ['app_title', cfg.app_title || defaultConfig.app_title],
+            ['add_button_text', cfg.add_button_text || defaultConfig.add_button_text]
+          ])
+        });
+        config = { ...defaultConfig, ...window.elementSdk.config };
+      }
+      updateConfigUI();
+    }
+
+    // Initialize app
+    async function init() {
+      initMap();
+      await initElementSdk();
+
+      // Initialize Data SDK
+      const initResult = await window.dataSdk.init(dataHandler);
+      if (!initResult.isOk) {
+        console.error('Failed to initialize data SDK');
+        showToast('Error al cargar datos', 'error');
+      }
+
+      // Event listeners - Form
+      document.getElementById('address-form').addEventListener('submit', handleFormSubmit);
+      
+      // Event listeners - Filters
+      document.getElementById('zone-filter').addEventListener('change', () => {
+        updateUI();
+        updateMarkers();
+      });
+      
+      document.getElementById('postal-filter').addEventListener('change', () => {
+        updateUI();
+        updateMarkers();
+      });
+      
+      document.getElementById('distance-filter').addEventListener('input', (e) => {
+        document.getElementById('distance-value').textContent = e.target.value;
+        updateUI();
+        updateMarkers();
+      });
+
+      // Event listeners - Route
+      document.getElementById('calc-route-btn').addEventListener('click', calculateRoute);
+      document.getElementById('clear-route-btn').addEventListener('click', clearRoute);
+
+      // Event listeners - Delete modal
+      document.getElementById('cancel-delete').addEventListener('click', hideDeleteModal);
+      document.getElementById('confirm-delete').addEventListener('click', deleteAddress);
+
+      // Event listeners - Import CSV/Excel
+      setupImportHandlers();
+
+      // Mobile sidebar toggle
+      document.getElementById('toggle-panel').addEventListener('click', () => {
+        document.getElementById('sidebar').classList.toggle('-translate-x-full');
+      });
+
+      // Close sidebar when clicking on map (mobile)
+      document.getElementById('map').addEventListener('click', () => {
+        if (window.innerWidth < 1024) {
+          document.getElementById('sidebar').classList.add('-translate-x-full');
+        }
+      });
+    }
+
+    // Setup import file handlers
+    function setupImportHandlers() {
+      const toggleBtn = document.getElementById('toggle-import-form');
+      const importSection = document.getElementById('import-form-section');
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('file-input');
+      const cancelBtn = document.getElementById('cancel-import-btn');
+
+      toggleBtn.addEventListener('click', () => {
+        importSection.classList.toggle('hidden');
+        if (!importSection.classList.contains('hidden')) {
+          fileInput.value = '';
+          document.getElementById('file-preview').classList.add('hidden');
+        }
+      });
+
+      dropZone.addEventListener('click', () => fileInput.click());
+
+      // Drag and drop
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+      });
+
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+          dropZone.classList.add('border-indigo-500', 'bg-indigo-500/5');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => {
+          dropZone.classList.remove('border-indigo-500', 'bg-indigo-500/5');
+        });
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) {
+          fileInput.files = files;
+          handleFileSelect(files[0]);
+        }
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) {
+          handleFileSelect(e.target.files[0]);
+        }
+      });
+
+      document.getElementById('import-btn').addEventListener('click', processImport);
+      cancelBtn.addEventListener('click', () => {
+        importSection.classList.add('hidden');
+        fileInput.value = '';
+        document.getElementById('file-preview').classList.add('hidden');
+        importedData = null;
+      });
+    }
+
+    // Handle file selection
+    function handleFileSelect(file) {
+      document.getElementById('file-name').textContent = file.name;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          let data = [];
+
+          if (file.name.endsWith('.csv')) {
+            data = parseCSV(e.target.result);
+          } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+            data = parseXLSX(e.target.result);
+          } else {
+            showToast('Formato de archivo no soportado', 'error');
+            return;
+          }
+
+          if (data.length === 0) {
+            showToast('No se encontraron datos en el archivo', 'error');
+            return;
+          }
+
+          importedData = data;
+          populateColumnSelectors(data);
+          document.getElementById('file-preview').classList.remove('hidden');
+        } catch (error) {
+          console.error('Error parsing file:', error);
+          showToast('Error al procesar el archivo', 'error');
+        }
+      };
+
+      if (file.name.endsWith('.csv')) {
+        reader.readAsText(file);
+      } else {
+        reader.readAsArrayBuffer(file);
+      }
+    }
+
+    // Parse CSV
+    function parseCSV(text) {
+      const lines = text.trim().split('\n');
+      if (lines.length < 2) return [];
+
+      const headers = lines[0].split(',').map(h => h.trim());
+      const data = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim());
+        const row = {};
+        headers.forEach((header, index) => {
+          row[header] = values[index] || '';
+        });
+        data.push(row);
+      }
+
+      return data;
+    }
+
+    // Parse XLSX/XLS using simple binary parsing
+    function parseXLSX(arrayBuffer) {
+      try {
+        // For XLSX, we'll use a simplified approach with sheet.js if available
+        // For now, provide a fallback message
+        showToast('Para archivos Excel, por favor usa formato CSV', 'info');
+        return [];
+      } catch (error) {
+        console.error('Error parsing XLSX:', error);
+        return [];
+      }
+    }
+
+    // Populate column selectors
+    function populateColumnSelectors(data) {
+      if (data.length === 0) return;
+
+      const headers = Object.keys(data[0]);
+      const addressSel = document.getElementById('address-column');
+      const zoneSel = document.getElementById('zone-column');
+      const postalSel = document.getElementById('postal-column');
+
+      // Reset selectors
+      addressSel.innerHTML = '<option value="">Selecciona columna de Dirección</option>';
+      zoneSel.innerHTML = '<option value="">Selecciona columna de Zona (opcional)</option>';
+      postalSel.innerHTML = '<option value="">Selecciona columna de Código Postal (opcional)</option>';
+
+      headers.forEach(header => {
+        const option1 = document.createElement('option');
+        option1.value = header;
+        option1.textContent = header;
+
+        const option2 = document.createElement('option');
+        option2.value = header;
+        option2.textContent = header;
+
+        const option3 = document.createElement('option');
+        option3.value = header;
+        option3.textContent = header;
+
+        addressSel.appendChild(option1);
+        zoneSel.appendChild(option2);
+        postalSel.appendChild(option3);
+
+        // Auto-detect common column names
+        const lowerHeader = header.toLowerCase();
+        if (lowerHeader.includes('dirección') || lowerHeader.includes('direccion') || lowerHeader.includes('address')) {
+          addressSel.value = header;
+        }
+        if (lowerHeader.includes('zona') || lowerHeader.includes('zone')) {
+          zoneSel.value = header;
+        }
+        if (lowerHeader.includes('postal') || lowerHeader.includes('codigo') || lowerHeader.includes('zip')) {
+          postalSel.value = header;
+        }
+      });
+    }
+
+    // Process import
+    async function processImport() {
+      if (!importedData || importedData.length === 0) {
+        showToast('No hay datos para importar', 'warning');
+        return;
+      }
+
+      const addressCol = document.getElementById('address-column').value;
+      if (!addressCol) {
+        showToast('Selecciona una columna de Dirección', 'warning');
+        return;
+      }
+
+      const zoneCol = document.getElementById('zone-column').value;
+      const postalCol = document.getElementById('postal-column').value;
+
+      // Check if we'd exceed the 999 limit
+      const totalAfterImport = addresses.length + importedData.length;
+      if (totalAfterImport > 999) {
+        showToast(`Solo puedes agregar ${999 - addresses.length} más direcciones`, 'warning');
+        return;
+      }
+
+      const importBtn = document.getElementById('import-btn');
+      const originalText = importBtn.innerHTML;
+      importBtn.disabled = true;
+      importBtn.innerHTML = '<span class="animate-spin">⏳</span> Importando...';
+
+      setLoading(true);
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const row of importedData) {
+        const address = row[addressCol]?.trim();
+        if (!address) continue;
+
+        try {
+          const coords = await geocodeAddress(address);
+          
+          if (coords) {
+            const newAddress = {
+              id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+              address: address,
+              zone: row[zoneCol]?.trim() || '',
+              postal_code: row[postalCol]?.trim() || '',
+              lat: coords.lat,
+              lng: coords.lng,
+              created_at: new Date().toISOString()
             };
-            Object.values(lists).forEach(list => list.innerHTML = '');
-            
-            // Contadores
-            const counts = { P: 0, D: 0, C: 0, A: 0 };
-            
-            if (rosaPlayers.length === 0) {
-                rosaEmpty.style.display = 'block';
+
+            const result = await window.dataSdk.create(newAddress);
+            if (result.isOk) {
+              successCount++;
             } else {
-                rosaEmpty.style.display = 'none';
-                rosaPlayers.forEach(player => {
-                    // Buscamos los datos completos del jugador en nuestra DB estática
-                    const playerData = DB_GIOCATORI.find(p => p.id === player.id);
-                    if (playerData) {
-                        counts[playerData.ruolo]++;
-                        const playerRow = createRosaRow(playerData, player.docId);
-                        lists[playerData.ruolo].appendChild(playerRow);
-                    }
-                });
+              errorCount++;
             }
-            
-            // Actualizamos contadores
-            document.getElementById('rosa-count').textContent = rosaPlayers.length;
-            document.getElementById('count-P').textContent = counts.P;
-            document.getElementById('count-D').textContent = counts.D;
-            document.getElementById('count-C').textContent = counts.C;
-            document.getElementById('count-A').textContent = counts.A;
+          } else {
+            errorCount++;
+          }
 
-            // Actualizamos la lista de jugadores (para habilitar/deshabilitar botones)
-            // Solo lo hacemos si los jugadores ya están cargados
-            if (DB_GIOCATORI.length > 0) {
-                renderPlayerList();
-            }
+          // Small delay to avoid rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (error) {
+          console.error('Error importing row:', error);
+          errorCount++;
         }
+      }
 
-        function createRosaRow(player, docId) {
-            const row = document.createElement('div');
-            row.className = 'flex items-center justify-between p-2 bg-gray-50 rounded-md';
-            row.innerHTML = `
-                <div class="flex items-center gap-2">
-                    <span class="role-${player.ruolo} text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full">${player.ruolo}</span>
-                    <div>
-                        <p class="text-sm font-medium text-gray-800">${player.nome}</p>
-                        <p class="text-xs text-gray-500">${player.squadra}</p>
-                    </div>
-                </div>
-                <button class="remove-player-btn text-red-400 hover:text-red-600" data-doc-id="${docId}" data-player-name="${player.nome}">
-                    <ion-icon name="close-circle-outline" class="text-lg"></ion-icon>
-                </button>
-            `;
-            
-            row.querySelector('.remove-player-btn').addEventListener('click', (e) => {
-                const btn = e.currentTarget;
-                const docId = btn.dataset.docId;
-                const playerName = btn.dataset.playerName;
-                openDeleteModal(playerName, docId);
-            });
-            
-            return row;
-        }
-        
-        // --- LÓGICA DE FIRESTORE (DATOS) ---
-        
-        function getRosaCollectionRef() {
-            // Ruta de la colección privada del usuario
-            return collection(db, `artifacts/${appId}/users/${userId}/miaRosa`);
-        }
+      setLoading(false);
+      importBtn.disabled = false;
+      importBtn.innerHTML = originalText;
 
-        async function loadRosa() {
-            if (unsubscribeRosa) unsubscribeRosa(); // Detenemos el listener anterior si existe
+      if (successCount > 0) {
+        showToast(`✓ ${successCount} direcciones importadas correctamente${errorCount > 0 ? ` (${errorCount} errores)` : ''}`, 'success');
+      } else {
+        showToast('No se pudieron importar las direcciones', 'error');
+      }
 
-            const rosaCollection = getRosaCollectionRef();
-            
-            // onSnapshot escucha cambios en tiempo real
-            unsubscribeRosa = onSnapshot(rosaCollection, (snapshot) => {
-                currentRosa = snapshot.docs.map(doc => ({
-                    ...doc.data(),
-                    docId: doc.id
-                }));
-                
-                // Ordenamos por rol
-                currentRosa.sort((a, b) => {
-                    // Asegurarnos que DB_GIOCATORI esté cargado antes de ordenar
-                    if (DB_GIOCATORI.length === 0) return 0;
-                    
-                    const playerA = DB_GIOCATORI.find(p => p.id === a.id);
-                    const playerB = DB_GIOCATORI.find(p => p.id === b.id);
-                    if (!playerA || !playerB) return 0;
-                    
-                    const roleOrder = { 'P': 1, 'D': 2, 'C': 3, 'A': 4 };
-                    return roleOrder[playerA.ruolo] - roleOrder[playerB.ruolo];
-                });
-                
-                renderMiaRosa(currentRosa);
-            }, (error) => {
-                console.error("Error al cargar la plantilla (onSnapshot): ", error);
-                // No usamos alert()
-                console.error("Error al conectar con la base de datos.");
-            });
-        }
+      // Reset import form
+      document.getElementById('import-form-section').classList.add('hidden');
+      document.getElementById('file-input').value = '';
+      document.getElementById('file-preview').classList.add('hidden');
+      importedData = null;
+    }
 
-        async function addPlayerToRosa(playerId) {
-            if (currentRosa.length >= 25) {
-                // No usamos alert()
-                console.warn("Plantilla llena. No puedes añadir más de 25 jugadores.");
-                // Podríamos mostrar un modal o un toast aquí
-                return;
-            }
-
-            const playerToAdd = DB_GIOCATORI.find(p => p.id === playerId);
-            if (!playerToAdd) return;
-
-            // Deshabilitamos el botón para evitar doble click
-            const btn = document.querySelector(`.add-player-btn[data-player-id="${playerId}"]`);
-            if (btn) {
-                btn.disabled = true;
-                btn.textContent = 'Añadiendo...';
-            }
-
-            try {
-                // Añadimos solo el ID a Firestore para ahorrar espacio
-                await addDoc(getRosaCollectionRef(), {
-                    id: playerToAdd.id,
-                    addedAt: new Date().toISOString()
-                });
-                // No necesitamos hacer nada más, onSnapshot se encargará de actualizar la UI
-            } catch (error) {
-                console.error("Error al añadir jugador: ", error);
-                if (btn) btn.disabled = false; // Reactivamos el botón si hay error
-            }
-        }
-
-        async function removePlayerFromRosa(docId) {
-            try {
-                const docRef = doc(db, `artifacts/${appId}/users/${userId}/miaRosa/${docId}`);
-                await deleteDoc(docRef);
-                closeModal(); // Cerramos el modal tras el éxito
-                // onSnapshot actualizará la UI
-            } catch (error) {
-                console.error("Error al eliminar jugador: ", error);
-                // No usamos alert()
-                console.error("Error al eliminar el jugador. Inténtalo de nuevo.");
-            }
-        }
-        
-        // --- LÓGICA DEL MODAL ---
-        
-        let docIdToDelete = null;
-
-        function openDeleteModal(playerName, docId) {
-            docIdToDelete = docId;
-            document.getElementById('modal-player-name').textContent = playerName;
-            document.getElementById('delete-modal').classList.remove('hidden');
-            
-            // Asignamos el listener al botón de confirmar (lo hacemos aquí para tener el docId)
-            const confirmBtn = document.getElementById('modal-confirm');
-            confirmBtn.onclick = () => removePlayerFromRosa(docIdToDelete);
-        }
-
-        function closeModal() {
-            docIdToDelete = null;
-            document.getElementById('delete-modal').classList.add('hidden');
-            // Limpiamos el listener
-            document.getElementById('modal-confirm').onclick = null;
-        }
-
-    </script>
-</body>
+    init();
+  </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9d0ed7651481ea72',t:'MTc3MTU5OTI4OS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
-
-
