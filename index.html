@@ -91,7 +91,7 @@
       <!-- Backdrop mobile -->
       <div id="sidebar-backdrop" class="fixed inset-0 bg-black/60 z-40 hidden lg:hidden"></div>
 
-      <!-- Sidebar (FIXED on mobile) -->
+      <!-- Sidebar -->
       <aside id="sidebar"
         class="fixed lg:relative inset-y-0 left-0
                w-[min(420px,92vw)] lg:w-[420px]
@@ -102,7 +102,6 @@
                transform -translate-x-full lg:translate-x-0
                transition-transform duration-200 ease-out">
 
-        <!-- Scroll container -->
         <div id="sidebar-scroll" class="flex-1 overflow-y-auto nice-scroll">
           <!-- Add Address -->
           <div class="p-4 border-b border-slate-700">
@@ -153,10 +152,6 @@
               <input type="checkbox" id="append-bologna" class="accent-indigo-500" checked />
               Autocompletar geocode: agregar “, Bologna, Italia” si no está
             </label>
-
-            <p class="text-xs text-slate-500 mt-2">
-              Se guarda en tu navegador (localStorage). Cache de geocoding activado.
-            </p>
           </div>
 
           <!-- Import -->
@@ -282,15 +277,6 @@
                 Limpiar selección/ruta
               </button>
             </div>
-
-            <div class="flex gap-2 mt-3">
-              <button id="export-gpx-btn" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold transition-all text-sm disabled:opacity-50" disabled>
-                Export GPX
-              </button>
-              <button id="export-kml-btn" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-xl font-semibold transition-all text-sm disabled:opacity-50" disabled>
-                Export KML
-              </button>
-            </div>
           </div>
 
           <!-- Route order -->
@@ -316,7 +302,7 @@
       <div class="flex-1 relative">
         <div id="map" class="absolute inset-0"></div>
 
-        <!-- Route info panel -->
+        <!-- Route info -->
         <div id="route-info"
           class="absolute top-4 right-4 bg-slate-800/90 backdrop-blur-lg rounded-2xl p-4 shadow-xl border border-slate-700 hidden w-[320px] z-30">
           <div class="flex items-center justify-between gap-2 mb-2">
@@ -328,35 +314,7 @@
           <div id="route-details" class="text-sm text-slate-300 space-y-1"></div>
         </div>
 
-        <!-- Navigation panel (placeholder UI) -->
-        <div id="nav-panel"
-          class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-lg rounded-2xl p-4 shadow-xl border border-slate-700 hidden w-[min(760px,calc(100vw-32px))] z-30">
-          <div class="flex items-center justify-between gap-3">
-            <div class="min-w-0">
-              <p class="text-xs text-slate-400">Navegación</p>
-              <p id="nav-next" class="font-semibold truncate">—</p>
-              <p id="nav-sub" class="text-xs text-slate-400">—</p>
-            </div>
-            <div class="flex gap-2 flex-shrink-0">
-              <button id="nav-start-btn" class="px-3 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 font-semibold text-sm">Start</button>
-              <button id="nav-sim-btn" class="px-3 py-2 rounded-xl bg-indigo-500 hover:bg-indigo-600 font-semibold text-sm">Simular</button>
-              <button id="nav-stop-btn" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-semibold text-sm">Stop</button>
-              <button id="nav-toggle-steps" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 font-semibold text-sm">Pasos</button>
-            </div>
-          </div>
-
-          <div class="mt-3">
-            <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-              <div id="nav-progress" class="h-2 bg-emerald-500 w-0"></div>
-            </div>
-          </div>
-
-          <div id="nav-steps" class="hidden mt-3 max-h-[180px] overflow-auto rounded-xl border border-slate-700 bg-slate-900/40 nice-scroll">
-            <div id="nav-steps-inner" class="p-3 space-y-2 text-sm"></div>
-          </div>
-        </div>
-
-        <!-- Loading Overlay -->
+        <!-- Loading -->
         <div id="loading" class="absolute inset-0 bg-slate-900/75 backdrop-blur flex items-center justify-center hidden z-40">
           <div class="bg-slate-800/80 border border-slate-700 rounded-2xl p-6 w-[min(420px,calc(100vw-32px))] shadow-2xl">
             <div class="flex items-center gap-3">
@@ -365,9 +323,6 @@
                 <p id="loading-text" class="text-slate-100 font-semibold text-base">Procesando…</p>
                 <p id="loading-sub" class="text-xs text-slate-400 mt-1 truncate">—</p>
               </div>
-            </div>
-            <div class="mt-4 text-xs text-slate-400">
-              <span class="text-slate-300">Tip:</span> importar muchas direcciones puede tardar por límites de geocoding.
             </div>
           </div>
         </div>
@@ -396,17 +351,17 @@
       maxAddresses: 999,
       maxRoutePoints: 10,
       importGeocodeDelayMs: 850,
-      defaultCenter: [44.4949, 11.3426],
+      defaultCenter: [44.4949, 11.3426], // Bologna
       defaultZoom: 13,
-      storageKey: "route_planner_beta_v2_state",
-      geocodeCacheKey: "route_planner_beta_v2_geocode_cache",
+      storageKey: "route_planner_beta_state_v3",
+      geocodeCacheKey: "route_planner_beta_geocode_cache_v3",
       autocompleteDelayMs: 250
     };
 
     // ========= STATE =========
     let addresses = [];
-    let selectedIds = [];
-    let visitOrderIds = [];
+    let selectedIds = [];      // puntos intermedios (max 10)
+    let visitOrderIds = [];    // orden manual (drag)
     let markers = {};
     let map = null;
 
@@ -415,11 +370,12 @@
     let deleteTargetId = null;
     let importedData = null;
 
-    let startPoint = null;
-    let endPoint = null;
+    let startPoint = null;     // {lat,lng,address}
+    let endPoint = null;       // {lat,lng,address}
     let lastOrderedRoutePoints = null;
 
     let geocodeCache = {};
+
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
     // ========= UX helpers =========
@@ -490,6 +446,20 @@
       return `${addr}, Bologna, Italia`;
     }
 
+    function loadGeocodeCache() {
+      try {
+        const raw = localStorage.getItem(config.geocodeCacheKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === "object") geocodeCache = parsed;
+        }
+      } catch {}
+    }
+
+    function saveGeocodeCache() {
+      try { localStorage.setItem(config.geocodeCacheKey, JSON.stringify(geocodeCache)); } catch {}
+    }
+
     async function geocodeAddress(query) {
       const q = query.trim();
       if (!q) return null;
@@ -498,6 +468,7 @@
       const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`;
       const res = await fetch(url, { headers: { "Accept": "application/json" } });
       if (!res.ok) return null;
+
       const data = await res.json();
       if (data && data.length) {
         const coords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
@@ -506,16 +477,6 @@
         return coords;
       }
       return null;
-    }
-
-    async function searchAutocomplete(query) {
-      const q = query.trim();
-      if (!q || q.length < 3) return [];
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&addressdetails=1&limit=6`;
-      const res = await fetch(url, { headers: { "Accept": "application/json" } });
-      if (!res.ok) return [];
-      const data = await res.json();
-      return (data || []).map(d => ({ label: d.display_name, lat: parseFloat(d.lat), lng: parseFloat(d.lon) }));
     }
 
     // ========= Persistence =========
@@ -528,17 +489,6 @@
         if (!raw) return;
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed?.addresses)) addresses = parsed.addresses;
-      } catch {}
-    }
-    function saveGeocodeCache() {
-      try { localStorage.setItem(config.geocodeCacheKey, JSON.stringify(geocodeCache)); } catch {}
-    }
-    function loadGeocodeCache() {
-      try {
-        const raw = localStorage.getItem(config.geocodeCacheKey);
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") geocodeCache = parsed;
       } catch {}
     }
 
@@ -743,25 +693,61 @@
       return { startPoint, endPoint };
     }
 
-    // ========= OSRM =========
+    // ========= OSRM helpers (FIX 400) =========
     function toLonLat(points) { return points.map(p => `${p.lng},${p.lat}`).join(";"); }
 
-    async function osrmRouteDriving(orderedPoints) {
-      const coords = toLonLat(orderedPoints);
+    function sanitizePoints(points) {
+      const cleaned = [];
+      const EPS = 1e-6;
+
+      for (const p of points) {
+        if (!p || typeof p.lat !== "number" || typeof p.lng !== "number") continue;
+        if (Number.isNaN(p.lat) || Number.isNaN(p.lng)) continue;
+
+        const last = cleaned[cleaned.length - 1];
+        if (last && Math.abs(last.lat - p.lat) < EPS && Math.abs(last.lng - p.lng) < EPS) continue; // remove consecutive dup
+
+        cleaned.push(p);
+      }
+      return cleaned;
+    }
+
+    function sameCoord(a, b) {
+      const EPS = 1e-6;
+      return a && b && Math.abs(a.lat - b.lat) < EPS && Math.abs(a.lng - b.lng) < EPS;
+    }
+
+    async function osrmRouteDriving(points) {
+      const pts = sanitizePoints(points);
+      if (pts.length < 2) throw new Error("Necesitás al menos 2 puntos distintos.");
+
+      const coords = toLonLat(pts);
       const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=full&geometries=geojson&steps=true`;
+
       const res = await fetch(url);
-      if (!res.ok) throw new Error("OSRM route failed");
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`OSRM route error (${res.status}). ${txt || ""}`.trim());
+      }
       return await res.json();
     }
 
     async function osrmTableDriving(points) {
-      const coords = toLonLat(points);
+      const pts = sanitizePoints(points);
+      if (pts.length < 2) throw new Error("Necesitás al menos 2 puntos distintos.");
+
+      const coords = toLonLat(pts);
       const url = `https://router.project-osrm.org/table/v1/driving/${coords}?annotations=duration,distance`;
+
       const res = await fetch(url);
-      if (!res.ok) throw new Error("OSRM table failed");
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`OSRM table error (${res.status}). ${txt || ""}`.trim());
+      }
       return await res.json();
     }
 
+    // ========= DP optimizer (exact up to 10 midpoints) =========
     function solveOptimalPathFixedStartEnd(matrix, startIdx, endIdx, waypointIdxs) {
       const n = waypointIdxs.length;
       if (n === 0) return [startIdx, endIdx];
@@ -815,18 +801,18 @@
       return [startIdx, ...orderWaypoints, endIdx];
     }
 
+    // ========= Route drawing =========
     function clearRouteLayersOnly() {
       if (routeLayer) { map.removeLayer(routeLayer); routeLayer = null; }
       routeNumberMarkers.forEach(m => map.removeLayer(m));
       routeNumberMarkers = [];
       lastOrderedRoutePoints = null;
       document.getElementById("route-info").classList.add("hidden");
-      document.getElementById("export-gpx-btn").disabled = true;
-      document.getElementById("export-kml-btn").disabled = true;
     }
 
     function drawRouteAndMarkers(orderedPoints, geojsonGeometry) {
       clearRouteLayersOnly();
+
       routeLayer = L.geoJSON(geojsonGeometry, { style: { color: "#6366f1", weight: 4, opacity: 0.95 } }).addTo(map);
 
       routeNumberMarkers = orderedPoints.map((p, idx) => {
@@ -858,10 +844,9 @@
         </div>
       `;
       panel.classList.remove("hidden");
-      document.getElementById("export-gpx-btn").disabled = false;
-      document.getElementById("export-kml-btn").disabled = false;
     }
 
+    // ========= Build midpoints =========
     function buildMidpointsFromVisitOrder() {
       syncVisitOrderWithSelected();
       return visitOrderIds
@@ -871,6 +856,7 @@
         .map(a => ({ lat: a.lat, lng: a.lng, address: a.address, _id: a.id }));
     }
 
+    // ========= Route actions =========
     async function calculateWithUserOrder() {
       const btn = document.getElementById("calc-route-btn");
       try {
@@ -878,10 +864,14 @@
         setLoading(true, "Calculando ruta…", "Respetando tu orden");
 
         await resolveStartEnd();
-        const mid = buildMidpointsFromVisitOrder();
+        let mid = buildMidpointsFromVisitOrder();
         if (!mid.length) throw new Error("No hay puntos intermedios válidos");
 
-        const points = [startPoint, ...mid, endPoint];
+        // remove midpoints equal to start/end (FIX duplicates)
+        mid = mid.filter(p => !sameCoord(p, startPoint) && !sameCoord(p, endPoint));
+
+        const points = sanitizePoints([startPoint, ...mid, endPoint]);
+        if (points.length < 2) throw new Error("Inicio/fin iguales o puntos inválidos");
 
         setLoading(true, "Trazando ruta por calles…", "OSRM Route");
         const routeRes = await osrmRouteDriving(points);
@@ -905,33 +895,42 @@
       const btn = document.getElementById("optimize-route-btn");
       try {
         setButtonLoading(btn, true, "Optimizar");
-        setLoading(true, "Optimizando recorrido…", "Calculando matriz de tiempos");
+        setLoading(true, "Optimizando recorrido…", "Preparando puntos");
 
         await resolveStartEnd();
-        const mid = buildMidpointsFromVisitOrder();
+        let mid = buildMidpointsFromVisitOrder();
         if (!mid.length) throw new Error("No hay puntos intermedios válidos");
 
-        const points = [startPoint, ...mid, endPoint];
+        // remove midpoints equal to start/end (FIX duplicates)
+        mid = mid.filter(p => !sameCoord(p, startPoint) && !sameCoord(p, endPoint));
 
-        setLoading(true, "Calculando matriz…", "OSRM Table (durations)");
-        const table = await osrmTableDriving(points);
+        const basePoints = sanitizePoints([startPoint, ...mid, endPoint]);
+        if (basePoints.length < 2) throw new Error("Inicio/fin iguales o puntos inválidos");
+        if (basePoints.length < 3) {
+          // solo inicio y fin => route directo
+          setLoading(true, "Trazando ruta directa…", "OSRM Route");
+          const routeRes = await osrmRouteDriving(basePoints);
+          const route = routeRes.routes[0];
+          drawRouteAndMarkers(basePoints, route.geometry);
+          showRouteInfo(basePoints, route.distance/1000, route.duration/60);
+          setLoading(false);
+          showToast("Ruta optimizada ✅", "success");
+          return;
+        }
+
+        setLoading(true, "Calculando matriz…", "OSRM Table");
+        const table = await osrmTableDriving(basePoints);
         const durations = table.durations;
         if (!durations) throw new Error("OSRM no devolvió durations");
 
-        setLoading(true, "Buscando el mejor orden…", "DP exacto (hasta 10 puntos)");
+        setLoading(true, "Buscando mejor orden…", "DP exacto");
         const startIdx = 0;
-        const endIdx = points.length - 1;
+        const endIdx = basePoints.length - 1;
         const waypointIdxs = [];
-        for (let i = 1; i < points.length - 1; i++) waypointIdxs.push(i);
+        for (let i = 1; i < basePoints.length - 1; i++) waypointIdxs.push(i);
 
         const orderIdxs = solveOptimalPathFixedStartEnd(durations, startIdx, endIdx, waypointIdxs);
-        const orderedPoints = orderIdxs.map(i => points[i]);
-
-        // reflect order back to UI (best-effort)
-        const optimizedMid = orderedPoints.slice(1, -1);
-        visitOrderIds = optimizedMid
-          .map(p => addresses.find(a => a.address === p.address && a.lat === p.lat && a.lng === p.lng)?._id)
-          .filter(Boolean);
+        const orderedPoints = orderIdxs.map(i => basePoints[i]);
 
         setLoading(true, "Trazando ruta final…", "OSRM Route");
         const routeRes = await osrmRouteDriving(orderedPoints);
@@ -940,8 +939,6 @@
         const route = routeRes.routes[0];
         drawRouteAndMarkers(orderedPoints, route.geometry);
         showRouteInfo(orderedPoints, route.distance / 1000, route.duration / 60);
-
-        updateUI();
 
         setLoading(false);
         showToast("Ruta optimizada ✅", "success");
@@ -952,10 +949,6 @@
         setButtonLoading(btn, false, "Optimizar");
       }
     }
-
-    // ========= Export placeholders =========
-    function exportGPX() { showToast("GPX: lo activamos en el siguiente paso.", "info"); }
-    function exportKML() { showToast("KML: lo activamos en el siguiente paso.", "info"); }
 
     // ========= Address list render =========
     function renderAddressList() {
@@ -1294,95 +1287,6 @@
       showToast(`Import: ${ok} ok${err ? ` • ${err} errores` : ""}`, ok ? "success" : "error");
     }
 
-    // ========= Backup / Restore / Clear =========
-    function downloadBackupJson() {
-      const payload = { exported_at: new Date().toISOString(), addresses };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "route_planner_backup.json";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      showToast("Backup descargado ✅", "success");
-    }
-
-    function clearAll() {
-      if (!confirm("¿Borrar todas las direcciones guardadas?")) return;
-      addresses = [];
-      selectedIds = [];
-      visitOrderIds = [];
-      clearRouteLayersOnly();
-      localStorage.removeItem(config.storageKey);
-      updateFilters();
-      updateUI();
-      updateMarkers();
-      showToast("Todo limpio ✅", "success");
-    }
-
-    function restoreBackupFromFile(file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const parsed = JSON.parse(reader.result);
-          if (!Array.isArray(parsed?.addresses)) throw new Error();
-          addresses = parsed.addresses;
-          selectedIds = [];
-          visitOrderIds = [];
-          clearRouteLayersOnly();
-          saveState();
-          updateFilters();
-          updateUI();
-          updateMarkers();
-          showToast("Backup restaurado ✅", "success");
-        } catch {
-          showToast("JSON inválido", "error");
-        }
-      };
-      reader.readAsText(file);
-    }
-
-    // ========= Autocomplete =========
-    function debounce(fn, delay) { let t=null; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args),delay);} }
-
-    function hideSuggestions(kind) {
-      const el = kind === "address" ? document.getElementById("address-suggestions")
-               : kind === "start" ? document.getElementById("start-suggestions")
-               : document.getElementById("end-suggestions");
-      el.classList.add("hidden");
-      el.innerHTML = "";
-    }
-
-    function showSuggestions(kind, items, inputEl) {
-      const el = kind === "address" ? document.getElementById("address-suggestions")
-               : kind === "start" ? document.getElementById("start-suggestions")
-               : document.getElementById("end-suggestions");
-      if (!items.length) return hideSuggestions(kind);
-
-      el.innerHTML = items.map(it => `
-        <button type="button" class="text-slate-200">
-          <div class="text-sm">${escapeHtml(it.label)}</div>
-          <div class="text-xs text-slate-400 mono">${it.lat.toFixed(5)}, ${it.lng.toFixed(5)}</div>
-        </button>
-      `).join("");
-
-      [...el.querySelectorAll("button")].forEach((btn, idx) => {
-        btn.addEventListener("click", () => { inputEl.value = items[idx].label; hideSuggestions(kind); });
-      });
-
-      el.classList.remove("hidden");
-    }
-
-    const handleAutocompleteAddress = debounce(async () => {
-      const input = document.getElementById("address-input");
-      const q = input.value.trim();
-      if (q.length < 3) return hideSuggestions("address");
-      const items = await searchAutocomplete(normalizeAddressForGeocode(q));
-      showSuggestions("address", items, input);
-    }, config.autocompleteDelayMs);
-
     // ========= UI =========
     function updateUI() {
       document.getElementById("address-count").textContent = `${addresses.length} direccion${addresses.length !== 1 ? "es" : ""}`;
@@ -1392,7 +1296,7 @@
       renderRouteOrder();
     }
 
-    // ========= Mobile Sidebar controls (FIX) =========
+    // ========= Mobile Sidebar controls =========
     function setupMobileSidebar() {
       const sidebar = document.getElementById("sidebar");
       const backdrop = document.getElementById("sidebar-backdrop");
@@ -1417,24 +1321,38 @@
       });
 
       backdrop.addEventListener("click", closeSidebar);
+      document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSidebar(); });
 
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") closeSidebar();
-      });
-
-      // Only close when map is clicked AND sidebar is open
       document.getElementById("map").addEventListener("click", () => {
         if (window.innerWidth < 1024 && isSidebarOpen()) closeSidebar();
       });
+    }
 
-      // Optional: auto-close sidebar after selecting an address in mobile
-      // (comentá si no te gusta)
-      const closeOnMobile = () => {
-        if (window.innerWidth < 1024 && isSidebarOpen()) closeSidebar();
-      };
-      // Hook into selection by listening for toast container (simple)
-      // We'll call closeOnMobile manually where we want; not mandatory
-      window.__closeSidebarMobile = closeOnMobile;
+    // ========= Delete =========
+    function showDeleteModal(id) {
+      deleteTargetId = id;
+      const addr = addresses.find(a => a.id === id);
+      document.getElementById("delete-address-text").textContent = addr ? addr.address : "Esta dirección";
+      document.getElementById("delete-modal").classList.remove("hidden");
+    }
+    function hideDeleteModal() {
+      deleteTargetId = null;
+      document.getElementById("delete-modal").classList.add("hidden");
+    }
+    function deleteAddress() {
+      if (!deleteTargetId) return;
+      const id = deleteTargetId;
+
+      addresses = addresses.filter(a => a.id !== id);
+      selectedIds = selectedIds.filter(x => x !== id);
+      visitOrderIds = visitOrderIds.filter(x => x !== id);
+
+      hideDeleteModal();
+      saveState();
+      updateFilters();
+      updateUI();
+      updateMarkers();
+      showToast("Dirección eliminada ✅", "success");
     }
 
     // ========= Init =========
@@ -1445,12 +1363,9 @@
       updateFilters();
       updateUI();
       updateMarkers();
-
       setupMobileSidebar();
 
       document.getElementById("address-form").addEventListener("submit", handleFormSubmit);
-      document.getElementById("address-input").addEventListener("input", handleAutocompleteAddress);
-      document.getElementById("address-input").addEventListener("blur", () => setTimeout(() => hideSuggestions("address"), 180));
 
       document.getElementById("start-select").addEventListener("change", updateStartEndSelectors);
       document.getElementById("end-select").addEventListener("change", updateStartEndSelectors);
@@ -1473,6 +1388,7 @@
 
       document.getElementById("calc-route-btn").addEventListener("click", calculateWithUserOrder);
       document.getElementById("optimize-route-btn").addEventListener("click", optimizeRoute);
+
       document.getElementById("clear-route-btn").addEventListener("click", () => {
         selectedIds = [];
         visitOrderIds = [];
@@ -1481,21 +1397,10 @@
         showToast("Selección y ruta limpiadas", "info");
       });
 
-      document.getElementById("export-gpx-btn").addEventListener("click", exportGPX);
-      document.getElementById("export-kml-btn").addEventListener("click", exportKML);
-
-      document.getElementById("backup-btn").addEventListener("click", downloadBackupJson);
-      document.getElementById("clear-all-btn").addEventListener("click", clearAll);
-      document.getElementById("restore-input").addEventListener("change", (e) => {
-        const f = e.target.files?.[0];
-        if (f) restoreBackupFromFile(f);
-        e.target.value = "";
-      });
-
       document.getElementById("cancel-delete").addEventListener("click", hideDeleteModal);
       document.getElementById("confirm-delete").addEventListener("click", deleteAddress);
 
-      showToast("Mobile FIX ✅ menú + panel scroll", "success");
+      showToast("Deploy OK ✅ + OSRM 400 FIX (dup points)", "success");
     }
 
     init();
